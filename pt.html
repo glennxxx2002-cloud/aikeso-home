@@ -2653,7 +2653,11 @@ var qrcode = function() {
 /* 單一角色頁：此頁固定顯示 病人端，不提供切換 */
 const ROLE = 'pt';
 /* ===================== 示範資料（全部虛構） ===================== */
-const NOW0 = new Date('2026-11-24T10:24:00+08:00');
+const DEMO_NOW = new Date('2026-11-24T10:24:00+08:00'); /* 示範資料原本的「現在」 */
+const NOW0 = new Date(); /* 真實時間：所有相對時間（ago／hrs）以載入當下為基準 */
+const DEMO_DAY_SHIFT = Math.round((NOW0.getTime() - DEMO_NOW.getTime()) / 86400000);
+function shiftDemoDates(o) { if (Array.isArray(o)) { o.forEach((v, i) => { if (typeof v === 'string') o[i] = shiftDateStr(v); else if (v && typeof v === 'object') shiftDemoDates(v); }); return o; } if (o && typeof o === 'object') { Object.keys(o).forEach((k) => { const v = o[k]; if (typeof v === 'string') o[k] = shiftDateStr(v); else if (v && typeof v === 'object') shiftDemoDates(v); }); } return o; }
+function shiftDateStr(s) { if (!/^2026-\d{2}-\d{2}$/.test(s)) return s; const d = new Date(s + 'T00:00:00+08:00'); d.setTime(d.getTime() + DEMO_DAY_SHIFT * 86400000); const t = new Date(d.getTime() + 8 * 3600000); return t.toISOString().slice(0, 10); }
 const MIN = 60000, H = 3600000;
 const ago = (min) => new Date(NOW0.getTime() - min * MIN).toISOString();
 const hrs = (h) => ago(h * 60);
@@ -2944,10 +2948,11 @@ function startVideo(pid) {
     '<div class="btn-row" style="margin-top:8px"><button class="btn xs" data-video-set="1">視訊會議設定</button></div>' +
     '<div class="note" style="margin-top:8px">僅供示範資料使用；正式版改接院方核可的通訊診察平台。</div>');
   return t.url;
-}const STORE_KEY = 'aikeso-proto-v7'; /* v7：心衰竭路徑暫停（Phase 2 重啟），示範資料改為 8 人 */
+}const STORE_KEY = 'aikeso-proto-v7rt'; /* v7：心衰竭路徑暫停（Phase 2 重啟），示範資料改為 8 人 */
 
 let state;
-function freshState() { const f = freshState0(); if (!HF_ENABLED) { const hf = new Set(f.patients.filter((p) => p.pathway === 'HF').map((p) => p.id)); f.patients = f.patients.filter((p) => !hf.has(p.id)); f.alerts = f.alerts.filter((a) => !hf.has(a.pid)); f.candidates = f.candidates.filter((c) => c.pathway !== 'HF'); f.dispatch = f.dispatch.filter((j) => !hf.has(j.pid)); f.closed = f.closed.filter((c) => c.pathway !== 'HF'); hf.forEach((id) => { delete f.ptTasks[id]; }); f.tasks = f.tasks.map((t) => t.k === '虛擬查房' ? { ...t, done: 3, total: 8 } : t.k === '居家訪視' ? { ...t, done: 2, total: 5 } : t); } f.patients.forEach((p, i) => { p.bed = 'V' + String(i + 1).padStart(2, '0'); }); return f; }
+function freshState() { const f = freshStateDemo(); shiftDemoDates(f); f.now = new Date().toISOString(); f.tOffset = 0; return f; }
+function freshStateDemo() { const f = freshState0(); if (!HF_ENABLED) { const hf = new Set(f.patients.filter((p) => p.pathway === 'HF').map((p) => p.id)); f.patients = f.patients.filter((p) => !hf.has(p.id)); f.alerts = f.alerts.filter((a) => !hf.has(a.pid)); f.candidates = f.candidates.filter((c) => c.pathway !== 'HF'); f.dispatch = f.dispatch.filter((j) => !hf.has(j.pid)); f.closed = f.closed.filter((c) => c.pathway !== 'HF'); hf.forEach((id) => { delete f.ptTasks[id]; }); f.tasks = f.tasks.map((t) => t.k === '虛擬查房' ? { ...t, done: 3, total: 8 } : t.k === '居家訪視' ? { ...t, done: 2, total: 5 } : t); } f.patients.forEach((p, i) => { p.bed = 'V' + String(i + 1).padStart(2, '0'); }); return f; }
 function freshState0() {
   return {
     now: NOW0.toISOString(), tab: ROLE,
@@ -2981,7 +2986,10 @@ function load() { const o = loadRaw(); ensureBeds(o.patients || []); return o; }
 function nextBed() { const used = new Set(state.patients.map((p) => p.bed)); for (let i = 1; i <= 99; i++) { const b = 'V' + String(i).padStart(2, '0'); if (!used.has(b)) return b; } return 'V99'; }
 function resetAll() { try { localStorage.removeItem(STORE_KEY); } catch (e) { } state = freshState(); if (typeof ROLE === 'string' && ROLE) state.tab = ROLE; if (window.__applyIdentity) window.__applyIdentity(); save(); render(); toast('已重設為初始示範資料' + (window.__syncState === 'ok' ? '（同步中的裝置一起重設）' : '')); }
 
-const now = () => new Date(state.now);
+/* 「現在」= 真實時間 + 示範偏移（+30 分按鈕累加的 tOffset，跨裝置同步）；state.now 隨之更新供記錄時間戳使用 */
+const nowReal = () => new Date(); /* 一律真實時間；所有紀錄的時間戳都是輸入當下 */
+const now = () => { const d = nowReal(); if (state) state.now = d.toISOString(); return d; };
+const tpYmd = (d) => new Date(new Date(d).getTime() + 8 * 3600000).toISOString().slice(0, 10); /* 台北日期 YYYY-MM-DD */
 const P = (id) => state.patients.find((p) => p.id === id);
 const A = (id) => state.alerts.find((a) => a.id === id);
 const PX = (id) => P(id) || state.closed.find((p) => p.id === id) || { name: id, pathway: 'PNA', day: 0 };
@@ -3122,7 +3130,7 @@ function canResolve(a) {
   return { ok: true };
 }
 function decide(pid, kind, text, who) { (state.decisions[pid] = state.decisions[pid] || []).push({ t: state.now, who, kind, text }); save(); }
-function stepTime(min) { state.now = new Date(now().getTime() + min * MIN).toISOString(); // 新的資料品質事件
+function stepTime(min) { toast('已改為真實時間，無法快轉'); now(); // 新的資料品質事件
   state.patients.forEach((p) => { const ev = evaluate(p); if (ev.dq && !state.alerts.some((a) => a.pid === p.id && a.level === 'dq' && a.status < 4)) createAlert(p.id, 'dq', ev.dqReasons.join('；'), ev); });
   save(); render(); }
 
@@ -3164,7 +3172,7 @@ function closePatient(pid, note, who) {
 }
 function daysSinceClose(p) { return Math.floor((now() - new Date(p.closedAt)) / 86400000); }
 function nextFollowup(p) { return (p.followups || []).find((f) => !f.done); }
-function jobTime(j) { return new Date('2026-11-24T' + j.time + ':00+08:00'); }
+function jobTime(j) { return new Date(tpYmd(now()) + 'T' + j.time + ':00+08:00'); }
 function jobLate(j) { return j.status < 2 && (now() - jobTime(j)) / MIN > 15; }
 function jobStep(j, who) {
   const names = ['出發', '到達', '完成'];
@@ -3873,13 +3881,13 @@ function buildHahBundle(pid, kind) {
   const jobs = (state.dispatch || []).filter((j) => j.pid === pid);
   const doseMatch = /(\d+(?:\.\d+)?)\s*(g|mg)\b/.exec(p.tx || '');
   const medAdmRefs = []; const visitRefs = []; const taskRefs = [];
-  const jobDate = (t) => fhirDT('2026-11-24T' + t + ':00+08:00');
+  const jobDate = (t) => fhirDT(tpYmd(nowReal()) + 'T' + t + ':00+08:00');
   jobs.forEach((j) => {
     const dep = j.log.find((l) => /出發/.test(l.what)), arr = j.log.find((l) => /到達/.test(l.what)), fin = j.log.find((l) => /完成/.test(l.what));
     const nurseRef = practitioner(j.nurse) || practitioner(p.rn) || practitioner('rn1');
     if (arr) visitRefs.push(add({ resourceType: 'Encounter', id: 'enc-' + pid + '-' + j.id, meta: { profile: [FHIR_PROF('HAHVisitEncounter')] }, extension: [{ url: FHIR_PROF('ExtHAHVisitMode'), valueCode: 'in-person' }], status: fin ? 'finished' : 'in-progress', class: { system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode', code: 'HH', display: 'home health' }, type: [fhirCC(FHIR_CS('hah-activity'), 'visit', '訪視')], subject: patRef, episodeOfCare: [eocRef], participant: [{ individual: nurseRef }], period: Object.assign({ start: fhirDT(arr.t) }, fin ? { end: fhirDT(fin.t) } : {}), serviceProvider: orgRef, location: [{ location: locRef }], partOf: admRef }));
     const stMap = ['ready', 'in-progress', 'in-progress', 'completed'];
-    const task = { resourceType: 'Task', id: 'task-' + pid + '-' + j.id, meta: { profile: [FHIR_PROF('HAHVisitTask')] }, status: (fin ? 'completed' : stMap[j.status]) || 'ready', intent: 'order', code: fhirCC(FHIR_CS('hah-activity'), 'visit', '訪視', j.tasks.join('、')), description: j.tasks.join('、'), focus: planRef, for: patRef, encounter: admRef, authoredOn: fhirDT(p.admit + 'T08:00:00+08:00') || now, requester: practitioner('rn1') || practitioner(p.md) || orgRef, owner: nurseRef, location: locRef, restriction: { period: { start: jobDate(j.time), end: fhirDT(new Date(new Date('2026-11-24T' + j.time + ':00+08:00').getTime() + 60 * MIN).toISOString()) } } };
+    const task = { resourceType: 'Task', id: 'task-' + pid + '-' + j.id, meta: { profile: [FHIR_PROF('HAHVisitTask')] }, status: (fin ? 'completed' : stMap[j.status]) || 'ready', intent: 'order', code: fhirCC(FHIR_CS('hah-activity'), 'visit', '訪視', j.tasks.join('、')), description: j.tasks.join('、'), focus: planRef, for: patRef, encounter: admRef, authoredOn: fhirDT(p.admit + 'T08:00:00+08:00') || now, requester: practitioner('rn1') || practitioner(p.md) || orgRef, owner: nurseRef, location: locRef, restriction: { period: { start: jobDate(j.time), end: fhirDT(new Date(new Date(tpYmd(nowReal()) + 'T' + j.time + ':00+08:00').getTime() + 60 * MIN).toISOString()) } } };
     if (dep || arr || fin) task.executionPeriod = Object.assign({ start: fhirDT((dep || arr || fin).t) }, fin ? { end: fhirDT(fin.t) } : {});
     taskRefs.push(add(task));
     if (fin && j.tasks.some((t) => /IV/.test(t)) && doseMatch) medAdmRefs.push(add({ resourceType: 'MedicationAdministration', id: 'medadm-' + pid + '-' + j.id, meta: { profile: [FHIR_PROF('HAHMedicationAdministration')] }, status: 'completed', medicationCodeableConcept: { text: String(p.tx).split(/[；;]/)[0].trim() }, subject: patRef, context: visitRefs[visitRefs.length - 1] || admRef, effectiveDateTime: fhirDT(fin.t), performer: [{ actor: nurseRef }], request: medRef, dosage: { route: { text: '靜脈' }, dose: fhirQty(parseFloat(doseMatch[1]), doseMatch[2], doseMatch[2]) } }));
@@ -4027,6 +4035,10 @@ document.addEventListener('click', (e) => {
   if (b.hasAttribute('data-be-clear')) { try { localStorage.removeItem('aikeso-api-url'); localStorage.removeItem('aikeso-pt-url'); } catch (x) { } closeModal(); toast('已清除此裝置的後端設定'); if (window.__syncRestart) window.__syncRestart(); render(); return; }
   if (b.hasAttribute('data-be-save')) { const api = (document.getElementById('be-api').value || '').trim(), pt = (document.getElementById('be-pt').value || '').trim(); if (api && !/^https:\/\//.test(api)) { toast('API 網址須以 https:// 開頭'); return; } try { if (api) localStorage.setItem('aikeso-api-url', api); else localStorage.removeItem('aikeso-api-url'); if (pt && /^https:\/\//.test(pt)) localStorage.setItem('aikeso-pt-url', pt); else localStorage.removeItem('aikeso-pt-url'); } catch (x) { } closeModal(); toast(api ? '已儲存，改走後端 API' : '已儲存'); if (window.__syncRestart) window.__syncRestart(); render(); return; }
 });
+/* 真實時間：每秒更新頂欄時鐘（不重繪整頁） */
+setInterval(() => { try { const el = document.getElementById('clock'); if (el && typeof fmtClock === 'function') el.textContent = fmtClock(now()); } catch (e) { } }, 1000);
+/* 每次操作前先把 state.now 更新成真實時間，紀錄的時間戳就是輸入當下 */
+['pointerdown', 'click', 'submit', 'change', 'keydown'].forEach((ev) => document.addEventListener(ev, () => { try { now(); } catch (e) { } }, true));
 
 /* ===================== 渲染與事件 ===================== */
 let drawerPid = null;
@@ -4636,6 +4648,8 @@ main{padding:20px 16px 48px}
 .ptlink svg{width:100%;max-width:130px;height:auto}
 .ptlink small{font-size:10.5px;color:var(--ink-3);word-break:break-all;line-height:1.25}
 @media (max-width:700px){.ptlinks{grid-template-columns:1fr 1fr}}
+/* 真實時間：移除模擬快轉按鈕 */
+#btn-time{display:none!important}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -4656,7 +4670,7 @@ main{padding:20px 16px 48px}
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
-  const UI_KEYS = ['tab', 'doc', 'pt', 'rn', 'filter', 'sort'];
+  const UI_KEYS = ['tab', 'doc', 'pt', 'rn', 'filter', 'sort', 'now']; /* now 是每台裝置的真實時間，不同步；tOffset（+30 分）會同步 */
   const canon = (st) => { const o = {}; Object.keys(st).forEach((k) => { if (!UI_KEYS.includes(k)) o[k] = st[k]; }); return JSON.stringify(o); };
   window.__syncCanon = canon; window.__syncSheetUrl = SHEET_URL;
   const qs = () => { try { return new URLSearchParams(location.search); } catch (e) { return new URLSearchParams(''); } };
