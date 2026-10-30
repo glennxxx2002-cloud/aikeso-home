@@ -4758,6 +4758,9 @@ main{padding:20px 16px 48px}
 .callrow{display:flex;align-items:baseline;gap:10px;padding:6px 10px;border:1px solid var(--line-soft);border-left-width:5px;border-radius:8px;font-size:15.5px}
 .callrow em{margin-left:auto;font-style:normal;font-weight:600;white-space:nowrap}
 .callrow.s-ringing{border-left-color:#d9822b}.callrow.s-accepted{border-left-color:#1f9d55}.callrow.s-declined,.callrow.s-missed{border-left-color:#c0392b}
+/* 新版本提示列 */
+.upd-bar{position:fixed;left:0;right:0;top:0;z-index:140;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1E3A66;color:#fff;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.upd-bar span{flex:1;min-width:0}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -4775,6 +4778,7 @@ main{padding:20px 16px 48px}
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
+  const APP_BUILD = Number('1793330786925') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
@@ -4861,17 +4865,18 @@ main{padding:20px 16px 48px}
   let T = null, apiBroken = false, pollTimer = null, hbInterval = null, roomSet = false, stopped = false;
   const rowsToRemote = (rows) => {
     const meta = rows[0] || [], chunks = rows[1] || [];
-    const ver = Number(meta[0]) || 0, at = Number(meta[1]) || 0, by = String(meta[2] || ''), who = String(meta[3] || ''), key = String(meta[4] || '');
+    const ver = Number(meta[0]) || 0, at = Number(meta[1]) || 0, by = String(meta[2] || ''), who = String(meta[3] || ''), key = String(meta[4] || ''), build = Number(meta[5]) || 0;
     const json = chunks.map((c) => (c == null ? '' : String(c))).join('');
     const devices = [];
     for (let i = 0; i < DEV_ROWS; i++) { const r = rows[DEV_ROW0 - 2 + i]; if (!r || !r[0]) continue; devices.push({ row: DEV_ROW0 + i, id: String(r[0]), role: String(r[1] || ''), who: String(r[2] || ''), at: Number(r[3]) || 0 }); }
-    return { ver, at, by, who, key, json, devices };
+    return { ver, at, by, who, key, build, json, devices };
   };
   const via = () => '（' + (T ? T.label : '') + '・';
   const applyRemote = (rm, src) => {
     const fresh = rm.devices.filter((d) => Date.now() - d.at < DEV_TTL);
     window.__devices = fresh.map((d) => ({ role: d.role, who: d.who, since: d.at, id: d.id, isMe: d.id === devId }));
-    window.__remoteDevices = rm.devices; window.__remoteVer = rm.ver;
+    window.__remoteDevices = rm.devices; window.__remoteVer = rm.ver; window.__remoteBuild = rm.build;
+    if (rm.build > APP_BUILD && APP_BUILD) newerBuild(rm.build);
     if (rm.json && rm.key && typeof STORE_KEY === 'string' && rm.key !== STORE_KEY) { setDot('wait', '試算表內是舊版資料（' + rm.key + '），以本機示範資料覆蓋'); window.__syncPush(true); return false; }
     if (!rm.json) { if (!rm.ver || rm.ver <= localVer) { window.__syncPush(true); } return false; }
     if (rm.ver < localVer && canon(state) !== rm.json) { window.__syncPush(true); return false; } /* 本機較新（離線期間的操作）：推上去 */
@@ -4909,7 +4914,7 @@ main{padding:20px 16px 48px}
     const chunks = []; for (let i = 0; i < COLS; i++) chunks.push(mine.slice(i * CHUNK, (i + 1) * CHUNK));
     if (mine.length > COLS * CHUNK) { setDot('err', '狀態太大（' + Math.round(mine.length / 1024) + ' KB）無法寫入試算表，請按「重設」'); writing = false; return; }
     try {
-      await T.write(RANGE_STATE, [[ver, Date.now(), roleNow(), whoNow(), (typeof STORE_KEY === 'string' ? STORE_KEY : '')], chunks]);
+      await T.write(RANGE_STATE, [[ver, Date.now(), roleNow(), whoNow(), (typeof STORE_KEY === 'string' ? STORE_KEY : ''), Math.max(APP_BUILD, window.__remoteBuild || 0)], chunks]);
       lastSeen = mine; saveVer(ver); window.__syncStats.pushed++; log('wrote v' + ver + ' (' + mine.length + ' chars)'); setDot('ok', '已同步 ' + hhmmss() + '（已寫入・' + T.label + '・v' + ver + '）'); if (window.__syncPing) window.__syncPing();
     } catch (e) { log('write failed ' + ((e && e.code) || e)); onErr(e, '寫入'); }
     writing = false; if (dirty) { dirty = false; flush(); }
@@ -4929,6 +4934,19 @@ main{padding:20px 16px 48px}
     catch (e) { window.__syncStats.errors++; }
   }
   window.__syncPresence = () => { clearTimeout(hbTimer); hbTimer = setTimeout(heartbeat, 800); };
+  /* 有新版：一般瀏覽器（GitHub Pages）自動重新載入並避開快取；正在輸入或有視窗時改顯示提示列 */
+  let newerShown = false;
+  function newerBuild(b) {
+    if (newerShown) return; newerShown = true; log('newer build ' + b + ' > ' + APP_BUILD);
+    const reload = () => { try { const u = new URL(location.href); u.searchParams.set('v', String(b)); location.replace(u.toString()); } catch (e) { location.reload(); } };
+    const busy = () => { const a = document.activeElement; return (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'gate-id' && a.id !== 'gate-pw') || (document.getElementById('modal') && document.getElementById('modal').classList.contains('on')); };
+    let tried = ''; try { tried = sessionStorage.getItem('aikeso-reload-for') || ''; } catch (e) { }
+    if (!hasClaude() && !busy() && tried !== String(b)) { try { sessionStorage.setItem('aikeso-reload-for', String(b)); } catch (e) { } toast('有新版本，正在更新…', 2500); setTimeout(reload, 1500); return; } /* 每個新版本只自動重載一次，避免伺服器仍給舊檔時一直重載 */
+    if (document.getElementById('upd-bar')) return;
+    document.body.insertAdjacentHTML('afterbegin', '<div class="upd-bar" id="upd-bar" role="status"><b>有新版本</b><span>' + (hasClaude() ? '請重新整理此頁（瀏覽器的重新載入）' : '按「更新」載入最新版') + '</span>' + (hasClaude() ? '' : '<button type="button" class="btn sm primary" id="upd-go">更新</button>') + '</div>');
+    const go = document.getElementById('upd-go'); if (go) go.addEventListener('click', reload);
+  }
+  window.__newerBuild = newerBuild; window.__appBuild = APP_BUILD;
   function stopAll() { clearInterval(pollTimer); clearInterval(hbInterval); pollTimer = null; hbInterval = null; stopped = true; }
   async function start(skipApi) {
     stopped = false; backoffUntil = 0;
