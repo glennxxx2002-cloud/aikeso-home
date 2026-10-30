@@ -2930,12 +2930,12 @@ function openVideoSettings() {
     '<div class="btn-row" style="margin-top:10px"><button class="btn primary" data-video-save="1">儲存</button>' + (cur ? '<button class="btn" data-video-clear="1">清除</button>' : '') + '<button class="btn" data-video-cancel="1">關閉</button></div>' +
     '<div class="note" style="margin-top:10px">Teams 會議選項請開啟「允許匿名使用者加入」；大廳設為「所有人可略過」，或由主持人准入。病人端點開連結後選「在瀏覽器中繼續」或 Teams App，輸入姓名以訪客加入。</div>');
 }
-function startVideo(pid) {
+function startVideo(pid, opts) {
   const t = videoTarget(), p = PX(pid);
   if (t.kind === 'unset') { openVideoSettings(); toast('尚未設定 Teams 會議連結，請先貼上連結'); return ''; }
   /* 一鍵進入：先開新分頁；被擋時嘗試整頁前往；都不行才顯示備援視窗 */
   let opened = false; try { opened = !!window.open(t.url, '_blank'); } catch (e) { opened = false; }
-  if (!opened) { try { opened = !!window.open(t.url, '_top'); } catch (e) { opened = false; } }
+  if (!opened && !(opts && opts.noTop)) { try { opened = !!window.open(t.url, '_top'); } catch (e) { opened = false; } }
   if (opened) { toast('視訊已開啟（' + videoLabel(t) + '）；對方按「視訊」即可加入', 4000); return t.url; }
   let framed = false; try { framed = window.self !== window.top; } catch (e) { framed = true; }
   const qr = videoQr(t.url);
@@ -3473,6 +3473,7 @@ function renderWar() {
   h += '<div class="card"><div class="card-h"><h3>到府行動小組</h3><span class="sub">三點打卡・逾時未到達自動告警</span></div><div class="card-b ops">' + ['rn2', 'rn3', 'rn4'].map((k) => { const js = jobsOf(k); const cur = js.find((j) => j.status === 1 || j.status === 2); const late = js.filter(jobLate); const dn = js.filter((j) => j.status === 3).length; return '<div class="op" style="grid-template-columns:90px 1fr auto"><span><b>' + STAFF[k].name + '</b></span><div style="font-size:17.5px">' + (cur ? '<span class="st s' + (cur.status === 2 ? 2 : 1) + '">' + JOB_ST[cur.status] + '</span> ' + esc(P(cur.pid) ? P(cur.pid).name : '') + '・' + esc(cur.area) + '・' + cur.time : '<span class="st s4">可用</span> 下一案 ' + (js.find((j) => j.status === 0) ? js.find((j) => j.status === 0).time + ' ' + esc(js.find((j) => j.status === 0).area) : '無')) + (late.length ? ' <span class="st s0">逾時 ' + late.length + '</span>' : '') + '</div><span class="num faint" style="font-size:16.5px">' + dn + '/' + js.length + '</span></div>'; }).join('') + '<div class="note">行動小組 A（王、李）／B（蔡）；派工排程 agent 依地理位置、技能與時間窗排出路線，臨時加派即時重排。</div></div></div>';
   h += followupCard();
   h += '<div class="card"><div class="card-h"><h3>交班與報表</h3></div><div class="card-b btn-row"><button class="btn sm" data-open="handoff">交班摘要</button><button class="btn sm" data-open="daily">營運日報</button><button class="btn sm" data-open="quality">品質指標</button><button class="btn sm" data-open="rules">警示規則表</button><button class="btn sm" data-video-set="1">視訊設定</button></div></div>';
+  h += '<div class="card" id="call-card"><div class="card-h"><h3>視訊邀請</h3><span class="sub">醫師發起・病人同意後進入 Teams</span></div><div class="card-b">' + callsPanel() + '</div></div>';
   h += '<div class="card" id="dev-card"><div class="card-h"><h3>裝置同步</h3><span class="sub">五個網址各自登入・後端同一張試算表・5 秒內同步</span></div><div class="card-b">' + devicesPanel() + '</div></div>';
   h += '<div class="card" id="ptlink-card"><div class="card-h"><h3>病人連結（院外使用）</h3><span class="sub">每床一個連結・不需 Claude 帳號</span></div><div class="card-b">' + patientLinksPanel() + '</div></div>';
   h += '</div></div>';
@@ -3526,7 +3527,7 @@ function renderDoc() {
     top = '<div class="ph-top"><div class="ttl"><button class="btn xs" data-doc="list">‹ 在案</button> 個案卡</div><div class="sub">' + p.id + '・' + esc(p.name) + '・Tech Pack ' + p.tech + '</div></div>';
     const canClose = L.light === 'green' && !L.open.length && !L.dq;
     body = '<div class="pcard">' + caseCard(p, 'doc') + '</div>' +
-      '<div class="pcard"><h3>醫師動作</h3><div class="btn-row"><button class="btn sm primary" data-act="video-p" data-p="' + p.id + '">一鍵視訊</button><button class="btn sm" data-act="edu" data-p="' + p.id + '">出院衛教（六段式）</button><button class="btn sm" data-act="targets" data-p="' + p.id + '">調整個別目標</button><button class="btn sm" data-act="order" data-p="' + p.id + '">開立醫囑（HIS）</button><button class="btn sm ' + (canClose ? '' : '') + '" data-act="close" data-p="' + p.id + '">結案確認</button></div><div class="note" style="margin-top:6px">P1：醫囑於既有 HIS 開立、App 內顯示；P2 行動下醫囑與電子簽章。結案須由醫師確認療程、症狀、功能與後續安排；綠燈不自動結案。</div></div>';
+      '<div class="pcard"><h3>醫師動作</h3>' + callChip(p.id) + '<div class="btn-row"><button class="btn sm primary" data-act="video-p" data-p="' + p.id + '">發起視訊（通知病人）</button><button class="btn sm" data-act="edu" data-p="' + p.id + '">出院衛教（六段式）</button><button class="btn sm" data-act="targets" data-p="' + p.id + '">調整個別目標</button><button class="btn sm" data-act="order" data-p="' + p.id + '">開立醫囑（HIS）</button><button class="btn sm ' + (canClose ? '' : '') + '" data-act="close" data-p="' + p.id + '">結案確認</button></div><div class="note" style="margin-top:6px">P1：醫囑於既有 HIS 開立、App 內顯示；P2 行動下醫囑與電子簽章。結案須由醫師確認療程、症狀、功能與後續安排；綠燈不自動結案。</div></div>';
   } else if (d.screen === 'alerts') {
     top = '<div class="ph-top"><div class="ttl">警示接收與分級處置</div><div class="sub">未解除 ' + open.length + '・紅色強制推播・規則 ' + RULE_VERSION + '</div></div>';
     body = (open.length ? open.map((a) => { const p = P(a.pid); const s = slaState(a); return '<div class="pcard stripe ' + a.level + '" style="border-radius:8px"><div style="display:flex;gap:8px;align-items:center">' + pill(a.level, a.level === 'red' ? '紅' : a.level === 'yellow' ? '黃' : '資料') + '<b>' + esc(p.name) + '</b><span class="faint num" style="font-size:16px">' + PATHWAYS[p.pathway].short + ' D' + p.day + '</span><span style="margin-left:auto">' + stBadge(a) + '</span></div><div style="font-size:18px;margin-top:5px">' + esc(a.text) + '</div><div class="al-meta faint num" style="font-size:16px;margin-top:4px">' + a.id + '・' + agoText(a.at) + '・<span class="' + (s.over ? 'over' : '') + '" style="' + (s.over ? 'color:var(--red);font-weight:600' : '') + '">' + s.text + '</span>・' + (a.owner ? staff(a.owner) : '尚無人接手') + '</div><div style="margin-top:6px">' + statusFlow(a) + '</div><div class="btn-row" style="margin-top:8px">' + alertActions(a, who) + '</div></div>'; }).join('') : '<div class="empty">沒有未解除的警示</div>') +
@@ -3553,7 +3554,7 @@ function renderDoc() {
 /* 醫師端動作 */
 function handleDocAction(btn) {
   const act = btn.dataset.act, pid = btn.dataset.p, p = pid ? P(pid) : null;
-  if (act === 'video-p') { const u = startVideo(pid); if (u) decide(pid, '視訊', '發起視訊查房（' + videoLabel(videoTarget()) + '）', staff(docWho())); render(); }
+  if (act === 'video-p') { inviteVideo(pid, staff(docWho())); }
   if (act === 'adopt') { promptText('醫師確認病情脈絡（可修改 AI 草稿）', '例：同意摘要；補充昨夜曾有寒顫，照顧者回報食慾差', (v) => { decide(pid, 'AI 病情整理', '醫師確認：' + v, staff(btn.dataset.who || docWho())); toast('已存入決策紀錄'); render(); }); }
   if (act === 'ddx') { openModal('疾病鑑別・' + p.name + '（' + PATHWAYS[p.pathway].name + '）', ddx(p) + '<div class="btn-row" style="margin-top:10px"><button class="btn sm primary" data-act="ddx-adopt" data-p="' + pid + '">採納並記錄下一步</button><button class="btn sm" data-act="ddx-edit" data-p="' + pid + '">修改後記錄</button></div>'); }
   if (act === 'ddx-adopt') { decide(pid, '疾病鑑別', '採納 AI 鑑別草稿；執行建議下一步（追問、複測、安排檢驗）', staff(docWho())); closeModal(); toast('已記錄：AI 草稿＋醫師採納'); render(); }
@@ -4042,6 +4043,92 @@ document.addEventListener('click', (e) => {
 setInterval(() => { try { const el = document.getElementById('clock'); if (el && typeof fmtClock === 'function') el.textContent = fmtClock(now()); } catch (e) { } }, 1000);
 /* 每次操作前先把 state.now 更新成真實時間，紀錄的時間戳就是輸入當下 */
 ['pointerdown', 'click', 'submit', 'change', 'keydown'].forEach((ev) => document.addEventListener(ev, () => { try { now(); } catch (e) { } }, true));
+
+/* ===================== 醫師發起視訊 → 病人收到邀請 → 按「同意視訊」進入同一場 Teams =====================
+   邀請存在共用狀態 state.calls（跟著後端同步）：醫師按「發起視訊」先進 Teams 並送出邀請；
+   病人端（登入中的病人）幾秒內跳出全螢幕邀請、響鈴與震動；按「同意視訊」記錄同意時間並開 Teams，
+   按「稍後再說」通知醫師；10 分鐘未回應視為未接。醫師端與戰情室即時看到狀態。 */
+const CALL_TTL = 10 * MIN;
+const CALL_LABEL = { ringing: '等待病人同意', accepted: '病人已同意', declined: '病人稍後再說', missed: '病人未回應', cancelled: '已取消' };
+function callStatus(c) { return (c.status === 'ringing' && Date.now() - Date.parse(c.at) > CALL_TTL) ? 'missed' : c.status; }
+function lastCall(pid) { return (state.calls || []).filter((c) => c.pid === pid).slice(-1)[0] || null; }
+function callChip(pid) {
+  const c = lastCall(pid); if (!c || Date.now() - Date.parse(c.at) > 6 * H) return '';
+  const s = callStatus(c);
+  return '<div class="callchip s-' + s + '" data-callchip="' + esc(pid) + '">📹 視訊邀請 ' + fmtT(c.at) + '・' + esc(c.by) + '・<b>' + CALL_LABEL[s] + (c.respondedAt ? ' ' + fmtT(c.respondedAt) : '') + '</b></div>';
+}
+function callsPanel() {
+  const cs = (state.calls || []).slice(-6).reverse();
+  if (!cs.length) return '<div class="note">尚無視訊邀請。醫師在個案卡按「發起視訊（通知病人）」後，病人端會跳出邀請，病人按同意即進入視訊。</div>';
+  return '<div class="calls">' + cs.map((c) => { const s = callStatus(c); return '<div class="callrow s-' + s + '"><b>' + esc(PX(c.pid).name) + '</b><span>' + esc(c.by) + '・' + fmtT(c.at) + '</span><em>' + CALL_LABEL[s] + (c.respondedAt ? ' ' + fmtT(c.respondedAt) : '') + '</em></div>'; }).join('') + '</div>';
+}
+/* 醫師端：送出邀請並自己先進會議（在點擊當下開 Teams，避免被擋） */
+function inviteVideo(pid, who) {
+  const p = P(pid); if (!p) { toast('找不到此個案'); return; }
+  if (videoTarget().kind === 'unset') { startVideo(pid); return; }
+  now();
+  state.calls = (state.calls || []).map((c) => (c.pid === pid && c.status === 'ringing') ? Object.assign({}, c, { status: 'cancelled' }) : c);
+  state.calls.push({ id: 'CALL-' + Date.now().toString(36), pid, by: who, at: new Date().toISOString(), status: 'ringing' });
+  if (state.calls.length > 40) state.calls = state.calls.slice(-40);
+  decide(pid, '視訊', '發起視訊邀請（' + videoLabel(videoTarget()) + '），已通知病人，等待同意', who);
+  save(); render();
+  startVideo(pid, { noTop: true });
+  setTimeout(() => toast(videoLabel(videoTarget()) + '已開啟；已通知 ' + p.name + '，病人按「同意視訊」就會進到同一場會議', 5000), 50);
+}
+/* 病人端：來電畫面 */
+(function () {
+  document.body.insertAdjacentHTML('beforeend', '<div class="callin" id="callin" role="alertdialog" aria-live="assertive" aria-labelledby="ci-h" hidden><div class="ci"><div class="ci-ic" aria-hidden="true">📹</div><div class="ci-h" id="ci-h"></div><div class="ci-s" id="ci-s"></div><div class="ci-btns"><button type="button" class="ci-ok" data-call="accept">同意視訊</button><button type="button" class="ci-no" data-call="decline">稍後再說</button></div><div class="ci-n">按「同意視訊」會開啟 Teams。第一次使用請選「在瀏覽器中繼續」或 Teams App，輸入姓名以訪客加入。</div></div></div>');
+  const box = document.getElementById('callin');
+  let showing = '', ringTimer = null, titleTimer = null, actx = null; const title0 = document.title;
+  document.addEventListener('pointerdown', () => { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) { } }, true);
+  const beep = () => { try { if (!actx || actx.state !== 'running') return; const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime; o.frequency.value = 880; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45); o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.5); } catch (e) { } };
+  const ring = () => { beep(); setTimeout(beep, 650); try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (e) { } };
+  function stopRing() { clearInterval(ringTimer); clearInterval(titleTimer); ringTimer = titleTimer = null; document.title = title0; try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) { } }
+  function myPid() {
+    if (typeof ROLE !== 'string' || ROLE !== 'pt' || !window.__currentUser) return null;
+    const g = document.getElementById('gate'); if (g && !g.hidden) return null;
+    return (state.pt && state.pt.pid) || window.__currentUser.who;
+  }
+  function hide() { box.hidden = true; showing = ''; stopRing(); }
+  window.__callCheck = function () {
+    const pid = myPid(); const c = pid ? (state.calls || []).filter((x) => x.pid === pid && callStatus(x) === 'ringing').slice(-1)[0] : null;
+    if (!c) { if (showing) hide(); return; }
+    if (showing === c.id) return;
+    showing = c.id; box.hidden = false;
+    document.getElementById('ci-h').textContent = c.by + ' 邀請您視訊';
+    document.getElementById('ci-s').textContent = '發起時間 ' + fmtT(c.at) + '・按「同意視訊」進入視訊查房';
+    stopRing(); ring(); ringTimer = setInterval(ring, 2500);
+    let on = false; titleTimer = setInterval(() => { on = !on; document.title = on ? '📹 醫師邀請您視訊' : title0; }, 1000);
+  };
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-call]'); if (!b) return;
+    const c = (state.calls || []).find((x) => x.id === showing);
+    if (!c || callStatus(c) !== 'ringing') { hide(); toast('這個視訊邀請已失效'); return; }
+    now(); c.status = b.dataset.call === 'accept' ? 'accepted' : 'declined'; c.respondedAt = new Date().toISOString();
+    if (c.status === 'accepted') {
+      decide(c.pid, '視訊', '病人同意視訊（' + videoLabel(videoTarget()) + '）', '病人端');
+      hide(); save(); render(); startVideo(c.pid, { noTop: true });
+    } else {
+      decide(c.pid, '視訊', '病人選擇稍後再視訊', '病人端');
+      hide(); save(); render(); toast('已告知醫師；您也可以隨時在「求助」按視訊', 5000);
+    }
+  });
+  /* 醫師端／戰情室：病人回應時提示，並更新畫面上的狀態 */
+  let seen = null;
+  window.__callWatch = function () {
+    const role = (typeof ROLE === 'string' && ROLE) ? ROLE : 'war';
+    const cs = state.calls || []; const map = {}; cs.forEach((c) => { map[c.id] = callStatus(c); });
+    if (seen === null) { seen = map; return; }
+    let changed = false;
+    cs.forEach((c) => {
+      const s = map[c.id]; if (seen[c.id] === s) return; changed = true;
+      if (role !== 'pt' && (s === 'accepted' || s === 'declined') && Date.now() - Date.parse(c.at) < 30 * MIN) toast('📹 ' + PX(c.pid).name + (s === 'accepted' ? ' 已同意視訊，正在加入 Teams' : ' 選擇稍後再視訊'), 6000);
+    });
+    seen = map;
+    if (changed && role !== 'pt') render();
+  };
+  setInterval(() => { try { window.__callCheck(); window.__callWatch(); } catch (e) { } }, 1000);
+})();
 
 /* ===================== 渲染與事件 ===================== */
 let drawerPid = null;
@@ -4653,6 +4740,24 @@ main{padding:20px 16px 48px}
 @media (max-width:700px){.ptlinks{grid-template-columns:1fr 1fr}}
 /* 真實時間：移除模擬快轉按鈕 */
 #btn-time{display:none!important}
+/* 視訊邀請：病人端來電畫面、醫師端狀態、戰情室清單 */
+.callin{position:fixed;inset:0;z-index:125;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#0b3a4f,#0f5a5a);padding:24px;color:#fff;text-align:center}
+.callin[hidden]{display:none}
+.callin .ci{max-width:440px;width:100%}
+.callin .ci-ic{font-size:64px;line-height:1;margin-bottom:12px;animation:ci-pulse 1.2s ease-in-out infinite}
+@keyframes ci-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.callin .ci-h{font-size:28px;font-weight:700;margin-bottom:8px}
+.callin .ci-s{font-size:17px;opacity:.9;margin-bottom:22px}
+.callin .ci-btns{display:flex;flex-direction:column;gap:12px}
+.callin .ci-ok{min-height:62px;border:0;border-radius:14px;background:#1f9d55;color:#fff;font-size:22px;font-weight:700;cursor:pointer}
+.callin .ci-no{min-height:50px;border:1.5px solid rgba(255,255,255,.6);border-radius:14px;background:transparent;color:#fff;font-size:18px;cursor:pointer}
+.callin .ci-n{margin-top:16px;font-size:14px;opacity:.75;line-height:1.5}
+.callchip{margin:4px 0 8px;padding:7px 10px;border-radius:8px;font-size:15px;background:#eef4fb;border-left:4px solid #3B7DD8}
+.callchip.s-ringing{background:#fff7e6;border-left-color:#d9822b}.callchip.s-accepted{background:#e9f7ef;border-left-color:#1f9d55}.callchip.s-declined,.callchip.s-missed{background:#fdeeee;border-left-color:#c0392b}.callchip.s-cancelled{opacity:.7}
+.calls{display:flex;flex-direction:column;gap:4px}
+.callrow{display:flex;align-items:baseline;gap:10px;padding:6px 10px;border:1px solid var(--line-soft);border-left-width:5px;border-radius:8px;font-size:15.5px}
+.callrow em{margin-left:auto;font-style:normal;font-weight:600;white-space:nowrap}
+.callrow.s-ringing{border-left-color:#d9822b}.callrow.s-accepted{border-left-color:#1f9d55}.callrow.s-declined,.callrow.s-missed{border-left-color:#c0392b}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
