@@ -3988,7 +3988,7 @@ const ENTRY_LINKS = {
 const ENTRY_SUB = { war: '帳號 W001', doc: '員工編號登入', pt: '床號登入（V01–V08）', rn: '員工編號登入' };
 const roleNow = () => (typeof ROLE === 'string' && ROLE) ? ROLE : 'war';
 const PUBLIC_BASE = 'https://glennxxx2002-cloud.github.io/aikeso-home/'; /* 院外（GitHub Pages，不需 Claude 帳號） */
-const PUBLIC_LINKS = { pt: PUBLIC_BASE + 'pt.html', doc: PUBLIC_BASE + 'doc.html', rn: PUBLIC_BASE + 'rn.html' };
+const PUBLIC_LINKS = { war: PUBLIC_BASE + 'war.html', pt: PUBLIC_BASE + 'pt.html', doc: PUBLIC_BASE + 'doc.html', rn: PUBLIC_BASE + 'rn.html' };
 const PT_PUBLIC_URL_BAKED = PUBLIC_LINKS.pt; /* 院外病人端公開網址 */
 function ptPublicUrl() { let o = ''; try { o = localStorage.getItem('aikeso-pt-url') || ''; } catch (e) { } return o || PT_PUBLIC_URL_BAKED || ENTRY_LINKS.pt; }
 function ptLink(bed) { const u = ptPublicUrl(); const api = (window.__apiUrl && window.__apiUrl()) || ''; /* 頁面尚未寫死 API 網址時，把 API 網址帶在病人連結裡，公開頁面才連得到後端 */ return u + (u.includes('?') ? '&' : '?') + 'bed=' + encodeURIComponent(bed) + (api && !window.__apiUrlBaked ? '&api=' + encodeURIComponent(api) : ''); }
@@ -4028,7 +4028,7 @@ function devicesList() {
 function devicesPanel() {
   return '<div id="dev-list">' + devicesList() + '</div>' +
     '<div class="dev-qr-t">各端入口（claude.ai 網址，各自的登入頁，後端同一份）・手機掃碼進入</div>' + entryQrs() +
-    '<div class="dev-qr-t" style="margin-top:10px">院外入口（GitHub Pages，不需 Claude 帳號；病人連結見下方卡片）</div><div class="entry-qrs">' + ['doc', 'rn'].map((r) => '<div class="entry-qr entry-' + r + '"><b>' + ROLE_LABEL[r] + '・院外</b>' + (typeof videoQr === 'function' ? videoQr(PUBLIC_LINKS[r]) : '') + '<small>' + PUBLIC_LINKS[r].replace('https://', '') + '</small></div>').join('') + '</div>' +
+    '<div class="dev-qr-t" style="margin-top:10px">院外入口（GitHub Pages，不需 Claude 帳號；病人連結見下方卡片）</div><div class="entry-qrs">' + ['war', 'doc', 'rn'].map((r) => '<div class="entry-qr entry-' + r + '"><b>' + ROLE_LABEL[r] + '・院外</b>' + (typeof videoQr === 'function' ? videoQr(PUBLIC_LINKS[r]) : '') + '<small>' + PUBLIC_LINKS[r].replace('https://', '') + '</small></div>').join('') + '</div>' +
     '<div class="note" style="margin-top:6px">合一 App（選端後登入）：<span class="mono">' + ENTRY_LINKS.app + '</span>' + (window.__syncSheetUrl ? '・共用試算表：<a href="' + window.__syncSheetUrl + '" target="_blank" rel="noopener">開啟</a>（請勿手動編輯）' : '') + '</div>' +
     '<div class="btn-row" style="margin-top:8px"><button type="button" class="btn xs" data-backend-set="1">後端設定（API 網址）</button><span class="note">通道：' + (window.__syncTransport === 'api' ? '後端 API' : window.__syncTransport === 'mcp' ? 'Google 試算表連接器' : '—') + '</span></div>';
 }
@@ -4988,7 +4988,7 @@ body.role-app .warcall{top:66px}
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793345858406') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793350759930') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
