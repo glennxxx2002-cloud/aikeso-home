@@ -2914,11 +2914,14 @@ const VIDEO_TEAMS_URL = 'https://teams.microsoft.com/meet/462622075441089?p=LTPR
 const VIDEO_LINK_KEY = 'aikeso-video-url';
 function videoSavedLink() { try { return (localStorage.getItem(VIDEO_LINK_KEY) || '').trim(); } catch (e) { return ''; } }
 function videoKindOf(url) { return /teams\.microsoft\.com|teams\.live\.com|teams\.cloud\.microsoft/.test(url) ? 'teams' : 'link'; }
-function videoTarget() {
+/* 每位病人一場獨立會議：state.videoLinks[pid]（跟著後端同步，所有裝置一致）；未設定的病人才用共用會議 */
+function videoTarget(pid) {
+  const own = pid && state && state.videoLinks && state.videoLinks[pid];
+  if (own) return { kind: videoKindOf(own), url: own, per: true };
   const link = videoSavedLink() || VIDEO_TEAMS_URL;
-  return link ? { kind: videoKindOf(link), url: link } : { kind: 'unset', url: '' };
+  return link ? { kind: videoKindOf(link), url: link, per: false } : { kind: 'unset', url: '' };
 }
-function videoLabel(t) { return t.kind === 'teams' ? 'Teams 會議' : t.kind === 'link' ? '視訊連結' : '尚未設定'; }
+function videoLabel(t) { return (t.kind === 'teams' ? 'Teams 會議' : t.kind === 'link' ? '視訊連結' : '尚未設定') + (t.kind === 'unset' ? '' : t.per ? '・病人專屬' : '・共用'); }
 function videoQr(link) { try { const q = qrcode(0, 'M'); q.addData(link); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }).replace('<svg ', '<svg style="width:100%;height:auto;display:block" '); } catch (e) { return ''; } }
 function openVideoSettings() {
   const cur = videoSavedLink(), t = videoTarget(), qr = t.url ? videoQr(t.url) : '';
@@ -2931,7 +2934,7 @@ function openVideoSettings() {
     '<div class="note" style="margin-top:10px">Teams 會議選項請開啟「允許匿名使用者加入」；大廳設為「所有人可略過」，或由主持人准入。病人端點開連結後選「在瀏覽器中繼續」或 Teams App，輸入姓名以訪客加入。</div>');
 }
 function startVideo(pid, opts) {
-  const t = videoTarget(), p = PX(pid);
+  const t = videoTarget(pid), p = PX(pid);
   if (t.kind === 'unset') { openVideoSettings(); toast('尚未設定 Teams 會議連結，請先貼上連結'); return ''; }
   /* 一鍵進入：先開新分頁；被擋時嘗試整頁前往；都不行才顯示備援視窗 */
   let opened = false; try { opened = !!window.open(t.url, '_blank'); } catch (e) { opened = false; }
@@ -2984,7 +2987,7 @@ function save() { saveLocal(); if (window.__syncPush) window.__syncPush(); }
 function ensureBeds(ps) { const used = new Set(ps.map((p) => p.bed).filter(Boolean)); ps.forEach((p) => { if (p.bed) return; for (let i = 1; i <= 99; i++) { const b = 'V' + String(i).padStart(2, '0'); if (!used.has(b)) { p.bed = b; used.add(b); break; } } }); }
 function load() { const o = loadRaw(); ensureBeds(o.patients || []); return o; }
 function nextBed() { const used = new Set(state.patients.map((p) => p.bed)); for (let i = 1; i <= 99; i++) { const b = 'V' + String(i).padStart(2, '0'); if (!used.has(b)) return b; } return 'V99'; }
-function resetAll() { try { localStorage.removeItem(STORE_KEY); } catch (e) { } state = freshState(); if (typeof ROLE === 'string' && ROLE) state.tab = ROLE; if (window.__applyIdentity) window.__applyIdentity(); save(); render(); toast('已重設為初始示範資料' + (window.__syncState === 'ok' ? '（同步中的裝置一起重設）' : '')); }
+function resetAll() { try { localStorage.removeItem(STORE_KEY); } catch (e) { } state = freshState(); if (typeof ROLE === 'string' && ROLE) state.tab = ROLE; if (window.__applyIdentity) window.__applyIdentity(); if (window.__syncResetMark) window.__syncResetMark(); save(); render(); toast('已重設為初始示範資料' + (window.__syncState === 'ok' ? '（同步中的裝置一起重設）' : '')); }
 
 /* 「現在」= 真實時間 + 示範偏移（+30 分按鈕累加的 tOffset，跨裝置同步）；state.now 隨之更新供記錄時間戳使用 */
 const nowReal = () => new Date(); /* 一律真實時間；所有紀錄的時間戳都是輸入當下 */
@@ -3286,7 +3289,7 @@ function handleAlertAction(btn) {
   if (act === 'resolve') { const c = canResolve(a); if (!c.ok) { toast(c.why); return; } promptText('解除原因（人工責任）', '例：複測 SpO₂ 94%、RR 20，症狀改善，維持計畫', (v) => { advance(a, 4, who, '解除警示：' + v); toast(a.id + ' 已解除'); render(); }); return; }
   if (act === 'escalate') { a.level = 'red'; a.log.push({ t: state.now, who: staff(who), what: '人工升級為紅色警示' }); save(); toast(a.id + ' 已升級為紅'); }
   if (act === 'lost') { advance(a, 2, who, '啟動失聯流程：備援電話 → 聯絡人 → 派訪視護理師到府'); toast('失聯流程已啟動'); }
-  if (act === 'video') { const u = startVideo(a.pid); if (u) { a.log.push({ t: state.now, who: staff(who), what: '發起視訊（' + videoLabel(videoTarget()) + '）' }); save(); } }
+  if (act === 'video') { const by = ((typeof ROLE === 'string' && ROLE) ? ROLE : 'war') === 'war' ? '戰情室・' + staff(who) : staff(who); if (inviteVideo(a.pid, by)) { a.log.push({ t: state.now, who: by, what: '發起視訊邀請（' + videoLabel(videoTarget(a.pid)) + '），等待病人同意' }); save(); } }
   render();
 }
 
@@ -3473,7 +3476,8 @@ function renderWar() {
   h += '<div class="card"><div class="card-h"><h3>到府行動小組</h3><span class="sub">三點打卡・逾時未到達自動告警</span></div><div class="card-b ops">' + ['rn2', 'rn3', 'rn4'].map((k) => { const js = jobsOf(k); const cur = js.find((j) => j.status === 1 || j.status === 2); const late = js.filter(jobLate); const dn = js.filter((j) => j.status === 3).length; return '<div class="op" style="grid-template-columns:90px 1fr auto"><span><b>' + STAFF[k].name + '</b></span><div style="font-size:17.5px">' + (cur ? '<span class="st s' + (cur.status === 2 ? 2 : 1) + '">' + JOB_ST[cur.status] + '</span> ' + esc(P(cur.pid) ? P(cur.pid).name : '') + '・' + esc(cur.area) + '・' + cur.time : '<span class="st s4">可用</span> 下一案 ' + (js.find((j) => j.status === 0) ? js.find((j) => j.status === 0).time + ' ' + esc(js.find((j) => j.status === 0).area) : '無')) + (late.length ? ' <span class="st s0">逾時 ' + late.length + '</span>' : '') + '</div><span class="num faint" style="font-size:16.5px">' + dn + '/' + js.length + '</span></div>'; }).join('') + '<div class="note">行動小組 A（王、李）／B（蔡）；派工排程 agent 依地理位置、技能與時間窗排出路線，臨時加派即時重排。</div></div></div>';
   h += followupCard();
   h += '<div class="card"><div class="card-h"><h3>交班與報表</h3></div><div class="card-b btn-row"><button class="btn sm" data-open="handoff">交班摘要</button><button class="btn sm" data-open="daily">營運日報</button><button class="btn sm" data-open="quality">品質指標</button><button class="btn sm" data-open="rules">警示規則表</button><button class="btn sm" data-video-set="1">視訊設定</button></div></div>';
-  h += '<div class="card" id="call-card"><div class="card-h"><h3>視訊邀請</h3><span class="sub">醫師發起・病人同意後進入 Teams</span></div><div class="card-b">' + callsPanel() + '</div></div>';
+  h += '<div class="card" id="meet-card"><div class="card-h"><h3>視訊會議</h3><span class="sub">每位病人一場獨立的 Teams 會議</span></div><div class="card-b">' + meetPanel() + '</div></div>';
+  h += '<div class="card" id="call-card"><div class="card-h"><h3>視訊邀請</h3><span class="sub">醫護邀請病人・病人來電先接戰情室，5 分鐘未接通轉醫師</span></div><div class="card-b">' + callsPanel() + '</div></div>';
   h += '<div class="card" id="dev-card"><div class="card-h"><h3>裝置同步</h3><span class="sub">五個網址各自登入・後端同一張試算表・5 秒內同步</span></div><div class="card-b">' + devicesPanel() + '</div></div>';
   h += '<div class="card" id="ptlink-card"><div class="card-h"><h3>病人連結（院外使用）</h3><span class="sub">每床一個連結・不需 Claude 帳號</span></div><div class="card-b">' + patientLinksPanel() + '</div></div>';
   h += '</div></div>';
@@ -3695,7 +3699,7 @@ function renderPt() {
 function handlePtAction(btn) {
   const act = btn.dataset.act; const p = P(state.pt.pid);
   if (act === 'pt-demo-worse') { const f = document.getElementById('pt-form'); const b = p.b0; const set = (k, v) => { if (f.elements[k]) f.elements[k].value = v; }; set('sbp', b.sbp - 24); set('dbp', b.dbp - 10); set('hr', b.hr + 26); set('spo2', p.targets.spo2Min - 2); set('temp', 38.4); set('rr', p.targets.rrMax + 2); set('o2', (p.targets.o2Max || 0) + 2); set('weight', b.weight ? (b.weight + 2.1).toFixed(1) : ''); set('glucose', (p.comorb || []).some((c) => /糖尿/.test(c)) ? 326 : ''); toast('已填入惡化示範值，按「送出量測」'); }
-  if (act === 'pt-video') { const u = startVideo(p.id); if (u) decide(p.id, '視訊', '病人端發起視訊（' + videoLabel(videoTarget()) + '）', '病人端'); }
+  if (act === 'pt-video') { requestWarVideo(p.id); }
   if (act === 'pt-call') { toast('撥打 24 小時專線（示範：一線護理師接聽）'); }
   if (act === 'pt-119') { const a = state.alerts.find((x) => x.pid === p.id && x.status < 4 && x.level === 'red'); if (a) { a.log.push({ t: state.now, who: '病人端 App', what: '病人按下「撥打 119」（正式版：tel:119 撥號）' }); save(); } toast('撥號 119（示範；正式版開啟電話撥號）', 5000); }
   if (act === 'pt-119-done') { hide119(); state.pt.screen = 'help'; render(); toast('若尚未撥打，請立刻撥 119；護理師會回撥協助', 6000); }
@@ -3733,7 +3737,7 @@ function jobCard(j, full) {
   return '<div class="pcard stripe ' + (jobLate(j) ? 'red' : L.light) + '" style="border-radius:8px"><div style="display:flex;gap:8px;align-items:center"><b class="num" style="font-size:20.5px">' + j.time + '</b><b>' + esc(p.name) + '</b><span class="faint" style="font-size:16.5px">' + PATHWAYS[p.pathway].short + ' D' + p.day + '・' + esc(j.area) + '</span><span style="margin-left:auto">' + jobBadge(j) + '</span></div>' +
     '<div class="chip-row" style="margin-top:6px">' + j.tasks.map((t) => '<span class="tag' + (j.first ? ' acc' : '') + '">' + esc(t) + '</span>').join('') + '</div>' +
     '<div class="faint num" style="font-size:16px;margin-top:5px">' + pill(L.light, L.light === 'red' ? '紅' : L.light === 'yellow' ? '黃' : '綠') + ' ' + (L.ev.reasons[0] ? esc(L.ev.reasons[0].s) : '穩定') + (j.log.length ? '・' + j.log.map((l) => l.what + ' ' + fmtT(l.t)).join('・') : '') + '</div>' +
-    '<div class="btn-row" style="margin-top:8px">' + (j.status === 0 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">出發打卡</button>' : j.status === 1 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">到達打卡</button>' : j.status === 2 ? '<button class="btn xs primary" data-act="job-open" data-j="' + j.id + '">填寫到府紀錄</button>' : '<button class="btn xs" data-act="job-open" data-j="' + j.id + '">查看紀錄</button>') + '<button class="btn xs" data-act="case" data-p="' + p.id + '">個案卡</button><button class="btn xs" data-act="rn-nav" data-j="' + j.id + '">導航</button></div></div>';
+    '<div class="btn-row" style="margin-top:8px">' + (j.status === 0 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">出發打卡</button>' : j.status === 1 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">到達打卡</button>' : j.status === 2 ? '<button class="btn xs primary" data-act="job-open" data-j="' + j.id + '">填寫到府紀錄</button>' : '<button class="btn xs" data-act="job-open" data-j="' + j.id + '">查看紀錄</button>') + '<button class="btn xs" data-act="rn-video" data-p="' + p.id + '">視訊</button><button class="btn xs" data-act="case" data-p="' + p.id + '">個案卡</button><button class="btn xs" data-act="rn-nav" data-j="' + j.id + '">導航</button></div></div>';
 }
 function renderRn() {
   const s = state.rn; const nurse = s.nurse; const jobs = jobsOf(nurse); const done = jobs.filter((j) => j.status === 3).length;
@@ -3786,6 +3790,7 @@ function handleRnAction(btn) {
   const act = btn.dataset.act;
   if (act === 'job-step') { const j = state.dispatch.find((x) => x.id === btn.dataset.j); jobStep(j, state.rn.nurse); toast(P(j.pid).name + '：' + JOB_ST[j.status] + '打卡 ' + fmtT(state.now)); if (j.status === 2) { state.rn.job = j.id; state.rn.screen = 'job'; } render(); }
   if (act === 'job-open') { state.rn.job = btn.dataset.j; state.rn.screen = 'job'; render(); }
+  if (act === 'rn-video') { inviteVideo(btn.dataset.p, staff(state.rn.nurse)); return; }
   if (act === 'rn-nav') { const j = state.dispatch.find((x) => x.id === btn.dataset.j); toast('導航至 ' + j.area + '（示範：路線 agent 已排入）'); }
   if (act === 'rn-photo') { const p = P(btn.dataset.p); const m = latest(p); m.photo = true; p.photoMissing = false; save(); toast('傷口照片已上傳，與前次自動比對'); }
   if (act === 'rn-safe') { toast('安全回報已送出：離開案家 ' + fmtT(state.now)); }
@@ -4050,8 +4055,20 @@ setInterval(() => { try { const el = document.getElementById('clock'); if (el &&
    按「稍後再說」通知醫師；10 分鐘未回應視為未接。醫師端與戰情室即時看到狀態。 */
 const CALL_TTL = 10 * MIN;
 const CALL_LABEL = { ringing: '等待病人同意', accepted: '病人已同意', declined: '病人稍後再說', missed: '病人未回應', cancelled: '已取消' };
-function callStatus(c) { return (c.status === 'ringing' && Date.now() - Date.parse(c.at) > CALL_TTL) ? 'missed' : c.status; }
-function lastCall(pid) { return (state.calls || []).filter((c) => c.pid === pid).slice(-1)[0] || null; }
+/* 病人端請求視訊（dir: pt2war）：戰情室接聽或回覆忙線；3 分鐘無人接聽視為未接 */
+const PT_ESC_MS = 5 * MIN, PT_MISS_MS = 10 * MIN; /* 5 分鐘未接通轉第二線（醫師），10 分鐘仍未接通視為未接 */
+const PT_PENDING = ['ringing', 'busy', 'escalated'];
+const PT_CALL_LABEL = { ringing: '等待戰情室接聽', busy: '戰情室忙線・等候中', escalated: '已轉第二線（醫師）', accepted: '已接聽', docbusy: '醫師忙線中', missed: '未接通', cancelled: '病人已取消' };
+const isPtCall = (c) => !!c && c.dir === 'pt2war';
+function callStatus(c) {
+  const age = Date.now() - Date.parse(c.at);
+  if (!isPtCall(c)) return (c.status === 'ringing' && age > CALL_TTL) ? 'missed' : c.status;
+  if (c.status === 'ringing' || c.status === 'busy') return age > PT_MISS_MS ? 'missed' : age > PT_ESC_MS ? 'escalated' : c.status;
+  if (c.status === 'docbusy' && age > PT_MISS_MS) return 'missed';
+  return c.status;
+}
+const callLabel = (c, s) => (isPtCall(c) ? PT_CALL_LABEL : CALL_LABEL)[s] || s;
+function lastCall(pid) { return (state.calls || []).filter((c) => c.pid === pid && !isPtCall(c)).slice(-1)[0] || null; }
 function callChip(pid) {
   const c = lastCall(pid); if (!c || Date.now() - Date.parse(c.at) > 6 * H) return '';
   const s = callStatus(c);
@@ -4059,21 +4076,22 @@ function callChip(pid) {
 }
 function callsPanel() {
   const cs = (state.calls || []).slice(-6).reverse();
-  if (!cs.length) return '<div class="note">尚無視訊邀請。醫師在個案卡按「發起視訊（通知病人）」後，病人端會跳出邀請，病人按同意即進入視訊。</div>';
-  return '<div class="calls">' + cs.map((c) => { const s = callStatus(c); return '<div class="callrow s-' + s + '"><b>' + esc(PX(c.pid).name) + '</b><span>' + esc(c.by) + '・' + fmtT(c.at) + '</span><em>' + CALL_LABEL[s] + (c.respondedAt ? ' ' + fmtT(c.respondedAt) : '') + '</em></div>'; }).join('') + '</div>';
+  if (!cs.length) return '<div class="note">尚無視訊。醫師在個案卡按「發起視訊（通知病人）」，病人同意後進入視訊；病人在「求助」按「視訊」會呼叫戰情室，戰情室可接聽或回覆忙線。</div>';
+  return '<div class="calls">' + cs.map((c) => { const s = callStatus(c); const pt = isPtCall(c); return '<div class="callrow s-' + s + (pt ? ' pt2war' : '') + '"><b>' + (pt ? esc(PX(c.pid).name) + ' → 戰情室' : esc(c.by) + ' → ' + esc(PX(c.pid).name)) + '</b><span>' + fmtT(c.at) + '</span><em>' + callLabel(c, s) + (c.respondedAt ? ' ' + fmtT(c.respondedAt) : '') + (c.answeredBy && s === 'accepted' ? '・' + esc(c.answeredBy) : '') + '</em></div>'; }).join('') + '</div>';
 }
 /* 醫師端：送出邀請並自己先進會議（在點擊當下開 Teams，避免被擋） */
 function inviteVideo(pid, who) {
-  const p = P(pid); if (!p) { toast('找不到此個案'); return; }
-  if (videoTarget().kind === 'unset') { startVideo(pid); return; }
+  const p = P(pid); if (!p) { toast('找不到此個案'); return false; }
+  if (videoTarget(pid).kind === 'unset') { startVideo(pid); return false; }
   now();
   state.calls = (state.calls || []).map((c) => (c.pid === pid && c.status === 'ringing') ? Object.assign({}, c, { status: 'cancelled' }) : c);
-  state.calls.push({ id: 'CALL-' + Date.now().toString(36), pid, by: who, at: new Date().toISOString(), status: 'ringing' });
+  state.calls.push({ id: 'CALL-' + Date.now().toString(36), pid, by: who, at: new Date().toISOString(), status: 'ringing' }); if (window.__ownCall) window.__ownCall(state.calls[state.calls.length - 1]);
   if (state.calls.length > 40) state.calls = state.calls.slice(-40);
-  decide(pid, '視訊', '發起視訊邀請（' + videoLabel(videoTarget()) + '），已通知病人，等待同意', who);
+  decide(pid, '視訊', '發起視訊邀請（' + videoLabel(videoTarget(pid)) + '），已通知病人，等待同意', who);
   save(); render();
   startVideo(pid, { noTop: true });
-  setTimeout(() => toast(videoLabel(videoTarget()) + '已開啟；已通知 ' + p.name + '，病人按「同意視訊」就會進到同一場會議', 5000), 50);
+  setTimeout(() => toast(videoLabel(videoTarget(pid)) + '已開啟；已通知 ' + p.name + '，病人按「同意視訊」就會進到同一場會議', 5000), 50);
+  return true;
 }
 /* 病人端：來電畫面 */
 (function () {
@@ -4091,7 +4109,7 @@ function inviteVideo(pid, who) {
   }
   function hide() { box.hidden = true; showing = ''; stopRing(); }
   window.__callCheck = function () {
-    const pid = myPid(); const c = pid ? (state.calls || []).filter((x) => x.pid === pid && callStatus(x) === 'ringing').slice(-1)[0] : null;
+    const pid = myPid(); const c = pid ? (state.calls || []).filter((x) => x.pid === pid && !isPtCall(x) && callStatus(x) === 'ringing').slice(-1)[0] : null;
     if (!c) { if (showing) hide(); return; }
     if (showing === c.id) return;
     showing = c.id; box.hidden = false;
@@ -4104,9 +4122,9 @@ function inviteVideo(pid, who) {
     const b = e.target.closest('button[data-call]'); if (!b) return;
     const c = (state.calls || []).find((x) => x.id === showing);
     if (!c || callStatus(c) !== 'ringing') { hide(); toast('這個視訊邀請已失效'); return; }
-    now(); c.status = b.dataset.call === 'accept' ? 'accepted' : 'declined'; c.respondedAt = new Date().toISOString();
+    now(); c.status = b.dataset.call === 'accept' ? 'accepted' : 'declined'; c.respondedAt = new Date().toISOString(); if (window.__ownCall) window.__ownCall(c);
     if (c.status === 'accepted') {
-      decide(c.pid, '視訊', '病人同意視訊（' + videoLabel(videoTarget()) + '）', '病人端');
+      decide(c.pid, '視訊', '病人同意視訊（' + videoLabel(videoTarget(c.pid)) + '）', '病人端');
       hide(); save(); render(); startVideo(c.pid, { noTop: true });
     } else {
       decide(c.pid, '視訊', '病人選擇稍後再視訊', '病人端');
@@ -4122,12 +4140,168 @@ function inviteVideo(pid, who) {
     let changed = false;
     cs.forEach((c) => {
       const s = map[c.id]; if (seen[c.id] === s) return; changed = true;
-      if (role !== 'pt' && (s === 'accepted' || s === 'declined') && Date.now() - Date.parse(c.at) < 30 * MIN) toast('📹 ' + PX(c.pid).name + (s === 'accepted' ? ' 已同意視訊，正在加入 Teams' : ' 選擇稍後再視訊'), 6000);
+      if (role !== 'pt' && !isPtCall(c) && window.__isOwnCall && window.__isOwnCall(c.id) && (s === 'accepted' || s === 'declined') && Date.now() - Date.parse(c.at) < 30 * MIN) toast('📹 ' + PX(c.pid).name + (s === 'accepted' ? ' 已同意視訊，正在加入 Teams' : ' 選擇稍後再視訊'), 6000);
     });
     seen = map;
     if (changed && role !== 'pt') render();
   };
   setInterval(() => { try { window.__callCheck(); window.__callWatch(); } catch (e) { } }, 1000);
+})();
+/* ===================== 病人端只能聯絡戰情室；5 分鐘未接通才轉第二線（醫師） =====================
+   病人在「求助」按「視訊」→ 戰情室右上角來電響鈴：「接聽」或「忙線中，請稍後」（忙線時病人繼續等候）。
+   請求 5 分鐘內戰情室未接聽 → 自動轉第二線：醫師端響鈴（顯示主責醫師），任一醫師可接聽；戰情室仍可接聽。
+   10 分鐘仍未接通 → 病人端提示改撥 24 小時專線，緊急請撥 119。升級時間由每台裝置依請求時間各自計算，不需任何裝置在線。 */
+function requestWarVideo(pid) {
+  const p = P(pid); if (!p) { toast('找不到此個案'); return; }
+  if (videoTarget(pid).kind === 'unset') { startVideo(pid); return; }
+  now();
+  const open = (state.calls || []).find((c) => isPtCall(c) && c.pid === pid && PT_PENDING.includes(callStatus(c)));
+  if (!open) {
+    state.calls = state.calls || [];
+    state.calls.push({ id: 'CALL-' + Date.now().toString(36), dir: 'pt2war', pid, by: p.name, at: new Date().toISOString(), status: 'ringing' }); if (window.__ownCall) window.__ownCall(state.calls[state.calls.length - 1]);
+    if (state.calls.length > 40) state.calls = state.calls.slice(-40);
+    decide(pid, '視訊', '病人端請求視訊，呼叫戰情室', '病人端');
+    save(); render();
+  }
+  if (window.__ptCallReset) window.__ptCallReset();
+  if (window.__ptCheckNow) window.__ptCheckNow(); /* 立刻顯示「呼叫中」，不等下一次檢查 */
+}
+(function () {
+  let actx = null;
+  document.addEventListener('pointerdown', () => { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) { } }, true);
+  const tone = (f, d) => { try { if (!actx || actx.state !== 'running') return; const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + d + 0.05); } catch (e) { } };
+  const loggedIn = () => { const g = document.getElementById('gate'); return !(g && !g.hidden); };
+  const roleIs = (r) => ((typeof ROLE === 'string' && ROLE) ? ROLE : 'war') === r;
+  const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const waited = (c) => mmss(Date.now() - Date.parse(c.at));
+  const toEsc = (c) => mmss(PT_ESC_MS - (Date.now() - Date.parse(c.at)));
+  const mdName = (pid) => { const p = P(pid); return p && STAFF[p.md] ? STAFF[p.md].name : '主責醫師'; };
+  /* ---- 病人端：呼叫中／忙線等候／已轉醫師／已接聽／未接通 ---- */
+  document.body.insertAdjacentHTML('beforeend', '<div class="callin callout" id="callout" role="dialog" aria-live="polite" aria-labelledby="co-h" hidden><div class="ci"><div class="ci-ic" id="co-ic" aria-hidden="true">📞</div><div class="ci-h" id="co-h"></div><div class="ci-s" id="co-s"></div><div class="ci-btns" id="co-btns"></div></div></div>');
+  const ob = document.getElementById('callout');
+  let shownId = '', shownStatus = '';
+  const dismissed = () => { try { return JSON.parse(sessionStorage.getItem('aikeso-call-dismissed') || '[]'); } catch (e) { return []; } };
+  const dismiss = (id) => { try { const d = dismissed(); d.push(id); sessionStorage.setItem('aikeso-call-dismissed', JSON.stringify(d.slice(-30))); } catch (e) { } };
+  window.__ptCallReset = () => { shownId = ''; shownStatus = ''; };
+  function myPid() { if (!roleIs('pt') || !window.__currentUser || !loggedIn()) return null; return (state.pt && state.pt.pid) || window.__currentUser.who; }
+  const btn = (k, label, cls) => '<button type="button" class="' + (cls || 'ci-no') + '" data-pc="' + k + '">' + label + '</button>';
+  const sub = (c, s) => s === 'ringing' ? '請稍候，戰情室接聽後會通知您・已等候 ' + waited(c) + '（' + toEsc(c) + ' 後未接通將轉給醫師）'
+    : s === 'busy' ? '戰情室正在處理其他病人，請稍候・已等候 ' + waited(c) + '（' + toEsc(c) + ' 後未接通將轉給醫師）'
+    : s === 'escalated' ? '戰情室 5 分鐘未接通，已通知 ' + mdName(c.pid) + '・已等候 ' + waited(c) : '';
+  function ptCheck() {
+    const pid = myPid(); const gone = dismissed();
+    const c = pid ? (state.calls || []).filter((x) => isPtCall(x) && x.pid === pid && !gone.includes(x.id) && Date.now() - Date.parse(x.at) < 20 * MIN).slice(-1)[0] : null;
+    const s = c ? callStatus(c) : '';
+    if (!c || s === 'cancelled') { if (!ob.hidden) ob.hidden = true; shownId = shownStatus = ''; return; }
+    /* 升級到第二線時，由病人端（呼叫者）寫一次紀錄 */
+    if (s === 'escalated' && !c.escalatedAt && window.__isOwnCall && window.__isOwnCall(c.id)) { c.escalatedAt = new Date(Date.parse(c.at) + PT_ESC_MS).toISOString(); decide(c.pid, '視訊', '戰情室 5 分鐘未接通，轉第二線：通知醫師（主責 ' + mdName(c.pid) + '）', '系統'); if (window.__ownCall) window.__ownCall(c); save(); }
+    if (PT_PENDING.includes(s)) document.getElementById('co-s').textContent = sub(c, s);
+    if (shownId === c.id && shownStatus === s) return;
+    shownId = c.id; shownStatus = s; ob.hidden = false; ob.className = 'callin callout s-' + s;
+    const set = (ic, h, t, btns) => { document.getElementById('co-ic').textContent = ic; document.getElementById('co-h').textContent = h; document.getElementById('co-s').textContent = t; document.getElementById('co-btns').innerHTML = btns; };
+    if (s === 'ringing') set('📞', '正在呼叫戰情室…', sub(c, s), btn('cancel', '取消呼叫'));
+    else if (s === 'busy') set('⏳', '戰情室忙線中，請稍候', sub(c, s), btn('cancel', '取消呼叫'));
+    else if (s === 'escalated') set('📞', '正在呼叫醫師…', sub(c, s), btn('cancel', '取消呼叫'));
+    else if (s === 'accepted') { set('📹', (c.answeredBy || '戰情室') + ' 已接聽', '請按「進入視訊」', btn('join', '進入視訊', 'ci-ok') + btn('close', '稍後再說')); tone(988, 0.3); setTimeout(() => tone(1319, 0.4), 320); try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { } }
+    else if (s === 'docbusy') set('⏳', '醫師忙線中', '請稍後再撥，或改撥 24 小時專線；若情況緊急，請直接撥打 119', btn('retry', '重新撥打', 'ci-ok') + btn('close', '關閉'));
+    else set('⏳', '目前無法接通', '戰情室與醫師暫時無人接聽。請改撥 24 小時專線；若情況緊急，請直接撥打 119', btn('retry', '重新撥打', 'ci-ok') + btn('close', '關閉'));
+  }
+  window.__ptCheckNow = () => { try { ptCheck(); } catch (e) { } };
+  ob.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-pc]'); if (!b) return;
+    const c = (state.calls || []).find((x) => x.id === shownId); const k = b.dataset.pc;
+    if (!c) { ob.hidden = true; return; }
+    now();
+    if (k === 'cancel') { if (PT_PENDING.includes(callStatus(c))) { c.status = 'cancelled'; c.respondedAt = new Date().toISOString(); if (window.__ownCall) window.__ownCall(c); decide(c.pid, '視訊', '病人取消視訊請求', '病人端'); save(); render(); } ob.hidden = true; return; }
+    if (k === 'join') { dismiss(c.id); ob.hidden = true; decide(c.pid, '視訊', '病人進入視訊（' + videoLabel(videoTarget(c.pid)) + '）', '病人端'); save(); render(); startVideo(c.pid, { noTop: true }); return; }
+    if (k === 'retry') { dismiss(c.id); ob.hidden = true; requestWarVideo(c.pid); return; }
+    dismiss(c.id); ob.hidden = true;
+  });
+  /* ---- 戰情室（第一線）與醫師端（第二線）：來電面板 ---- */
+  document.body.insertAdjacentHTML('beforeend', '<div class="warcall" id="warcall" role="alertdialog" aria-live="assertive" aria-label="病人視訊請求" hidden></div>');
+  const wp = document.getElementById('warcall');
+  let ringT = null, titleT = null, ringingKey = ''; const title0 = document.title;
+  function stopRing() { clearInterval(ringT); clearInterval(titleT); ringT = titleT = null; document.title = title0; }
+  function panelCalls() {
+    if (!loggedIn()) return [];
+    const cs = (state.calls || []).filter(isPtCall);
+    if (roleIs('war')) return cs.filter((c) => PT_PENDING.includes(callStatus(c)));
+    if (roleIs('doc')) return cs.filter((c) => callStatus(c) === 'escalated');
+    return [];
+  }
+  function panelCheck() {
+    const list = panelCalls(); const doc = roleIs('doc');
+    if (!list.length) { if (!wp.hidden) { wp.hidden = true; wp.innerHTML = ''; } if (ringT) stopRing(); ringingKey = ''; return; }
+    wp.hidden = false; wp.className = 'warcall' + (doc ? ' doc' : '');
+    wp.innerHTML = '<div class="wc-h">' + (doc ? '📹 第二線：病人視訊請求（戰情室 5 分鐘未接通）' : '📹 病人請求視訊') + '（' + list.length + '）</div>' + list.map((c) => {
+      const p = PX(c.pid), s = callStatus(c);
+      const tag = s === 'busy' ? '<i class="wc-tag">已回覆忙線・病人等候中</i>' : s === 'escalated' ? '<i class="wc-tag esc">已轉醫師（主責 ' + esc(mdName(c.pid)) + '）</i>' : '<i class="wc-tag">' + toEsc(c) + ' 後轉醫師</i>';
+      return '<div class="wc-row s-' + s + '"><div class="wc-who"><b>' + esc(p.name) + '</b><span>' + esc(p.bed || '') + '・' + esc(c.pid) + (p.pathway && PATHWAYS[p.pathway] ? '・' + PATHWAYS[p.pathway].short : '') + (doc ? '・主責 ' + esc(mdName(c.pid)) : '') + '</span><small>' + fmtT(c.at) + ' 來電・已等候 ' + waited(c) + '</small>' + (doc ? '' : tag) + '</div><div class="wc-btns"><button type="button" class="btn sm primary" data-wc="accept" data-id="' + c.id + '">接聽</button>' + (s === 'busy' ? '' : '<button type="button" class="btn sm" data-wc="busy" data-id="' + c.id + '">忙線中，請稍後</button>') + '</div></div>';
+    }).join('');
+    const key = list.filter((c) => callStatus(c) !== 'busy').map((c) => c.id + ':' + callStatus(c)).join(',');
+    if (key !== ringingKey) { ringingKey = key; stopRing(); if (key) { const f = doc ? 880 : 740; const r = () => { tone(f, 0.35); setTimeout(() => tone(f, 0.35), 450); }; r(); ringT = setInterval(r, 3000); let on = false; titleT = setInterval(() => { on = !on; document.title = on ? '📹 病人請求視訊' : title0; }, 1000); } }
+  }
+  wp.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-wc]'); if (!b) return;
+    const c = (state.calls || []).find((x) => x.id === b.dataset.id);
+    if (!c || !PT_PENDING.includes(callStatus(c))) { toast('這通視訊請求已結束'); panelCheck(); return; }
+    now(); const doc = roleIs('doc');
+    const who = doc ? staff(typeof docWho === 'function' ? docWho() : 'md1') : ((window.__currentUser && window.__currentUser.name) || '戰情室');
+    c.respondedAt = new Date().toISOString(); c.answeredBy = who;
+    if (b.dataset.wc === 'accept') {
+      c.status = 'accepted'; if (window.__ownCall) window.__ownCall(c);
+      decide(c.pid, '視訊', (doc ? '第二線醫師接聽病人視訊（' : '戰情室接聽病人視訊（') + videoLabel(videoTarget(c.pid)) + '）', who);
+      save(); render(); panelCheck(); startVideo(c.pid, { noTop: true });
+    } else {
+      c.status = doc ? 'docbusy' : 'busy'; if (window.__ownCall) window.__ownCall(c);
+      decide(c.pid, '視訊', doc ? '醫師忙線中，請病人稍後再撥' : '戰情室忙線中，請病人稍候（5 分鐘未接通轉醫師）', who);
+      save(); render(); panelCheck(); toast('已回覆 ' + PX(c.pid).name + '：忙線中，請稍後', 4000);
+    }
+  });
+  setInterval(() => { try { ptCheck(); panelCheck(); } catch (e) { } }, 1000);
+})();
+/* ===================== 每位病人一場獨立的 Teams 會議（設定存在共用狀態，所有裝置一致） ===================== */
+function meetPanel() {
+  const links = state.videoLinks || {}; const ps = state.patients; const n = ps.filter((p) => links[p.id]).length;
+  return '<div class="note" style="margin-bottom:6px">已設定專屬會議 <b>' + n + '/' + ps.length + '</b> 位' + (n < ps.length ? '；未設定的病人仍使用<b>共用會議</b>，同時視訊的病人會在同一場見到彼此。' : '，每位病人各自一場。') + '</div>' +
+    '<div class="meets">' + ps.map((p) => '<div class="meet-row"><b>' + esc(p.bed || '') + '</b><span>' + esc(p.name) + '</span><em class="' + (links[p.id] ? 'ok' : 'warn') + '">' + (links[p.id] ? '專屬會議' : '共用會議') + '</em></div>').join('') + '</div>' +
+    '<div class="btn-row" style="margin-top:8px"><button type="button" class="btn sm" data-meet-set="1">設定每位病人的會議連結</button></div>';
+}
+function openMeetSettings() {
+  const links = state.videoLinks || {};
+  openModal('每位病人一場獨立的 Teams 會議',
+    '<div class="note" style="margin-bottom:8px">在 Outlook 行事曆為每位病人各建一場 Teams 會議（建議每日週期、標題含床號），複製「加入會議」連結貼到對應病人。儲存後所有裝置同步使用；留空的病人使用共用會議。會議選項請設「誰可以略過大廳：所有人」並允許匿名加入。</div>' +
+    '<div class="meet-edit">' + state.patients.map((p) => '<label><b>' + esc(p.bed || '') + '・' + esc(p.name) + '</b><input type="url" data-meet-pid="' + esc(p.id) + '" placeholder="https://teams.microsoft.com/…" value="' + esc(links[p.id] || '') + '"></label>').join('') + '</div>' +
+    '<div class="btn-row" style="margin-top:10px"><button class="btn primary" data-meet-save="1">儲存（所有裝置同步）</button><button class="btn" data-meet-cancel="1">取消</button></div>');
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-meet-set],button[data-meet-save],button[data-meet-cancel]'); if (!b) return;
+  if (b.hasAttribute('data-meet-set')) { openMeetSettings(); return; }
+  if (b.hasAttribute('data-meet-cancel')) { closeModal(); return; }
+  const next = {}; let bad = '';
+  document.querySelectorAll('input[data-meet-pid]').forEach((i) => { const v = (i.value || '').trim(); if (!v) return; if (!/^https:\/\//.test(v)) { bad = i.dataset.meetPid; return; } next[i.dataset.meetPid] = v; });
+  if (bad) { toast(PX(bad).name + ' 的連結須以 https:// 開頭'); return; }
+  now(); state.videoLinks = next; save(); closeModal(); render();
+  toast('已儲存 ' + Object.keys(next).length + ' 位病人的專屬會議連結（所有裝置同步）', 4000);
+});
+/* 自我修復：本機建立或回應過的視訊紀錄若在同步後不見了，或被較舊的狀態蓋回去（同時寫入），15 分鐘內自動補回並重新送出 */
+(function () {
+  const own = new Map();
+  window.__ownCall = (c) => own.set(c.id, JSON.parse(JSON.stringify(c)));
+  window.__isOwnCall = (id) => own.has(id);
+  setInterval(() => {
+    try {
+      if (!own.size) return; let fixed = false;
+      own.forEach((o, id) => {
+        if (Date.now() - Date.parse(o.at) > 15 * MIN) { own.delete(id); return; }
+        const cur = (state.calls || []).find((c) => c.id === id);
+        if (!cur) { state.calls = (state.calls || []).concat([JSON.parse(JSON.stringify(o))]); fixed = true; }
+        else if ((cur.respondedAt || '') < (o.respondedAt || '')) { Object.assign(cur, JSON.parse(JSON.stringify(o))); fixed = true; }
+        else if ((cur.respondedAt || '') > (o.respondedAt || '')) own.set(id, JSON.parse(JSON.stringify(cur)));
+      });
+      if (fixed) save();
+    } catch (e) { }
+  }, 1500);
 })();
 
 /* ===================== 渲染與事件 ===================== */
@@ -4761,6 +4935,42 @@ main{padding:20px 16px 48px}
 /* 新版本提示列 */
 .upd-bar{position:fixed;left:0;right:0;top:0;z-index:140;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1E3A66;color:#fff;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .upd-bar span{flex:1;min-width:0}
+/* 病人端：呼叫戰情室的等候／接聽／忙線畫面 */
+.callout{z-index:124}
+.callout.s-ringing{background:linear-gradient(180deg,#1E3A66,#2b4f86)}
+.callout.s-accepted{background:linear-gradient(180deg,#0b4a2f,#137a4a)}
+.callout.s-busy,.callout.s-missed{background:linear-gradient(180deg,#5a3a0b,#7a5213)}
+.callout.s-ringing .ci-ic{animation:ci-pulse 1.2s ease-in-out infinite}
+.callout.s-busy .ci-ic,.callout.s-missed .ci-ic{animation:none}
+/* 戰情室：病人視訊來電面板 */
+.warcall{position:fixed;top:122px;right:16px;z-index:126;width:min(420px,calc(100vw - 32px));background:#fff;border:2px solid #d9822b;border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:12px 14px;animation:wc-in .25s ease-out}
+.warcall[hidden]{display:none}
+@keyframes wc-in{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+.warcall .wc-h{font-weight:700;font-size:17px;color:#9a4b0c;margin-bottom:8px}
+.warcall .wc-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 0;border-top:1px solid var(--line-soft)}
+.warcall .wc-who{flex:1 1 180px;display:flex;flex-direction:column}
+.warcall .wc-who b{font-size:18px}
+.warcall .wc-who span{font-size:14px;color:var(--ink-3)}
+.warcall .wc-who small{font-size:13.5px;color:var(--ink-3)}
+.warcall .wc-btns{display:flex;gap:8px;flex-wrap:wrap}
+.callrow.pt2war b::before{content:"📞 "}
+.callout.s-escalated{background:linear-gradient(180deg,#3b2a66,#55408c)}
+.callout.s-docbusy{background:linear-gradient(180deg,#5a3a0b,#7a5213)}
+.callout.s-escalated .ci-ic{animation:ci-pulse 1.2s ease-in-out infinite}
+.warcall.doc{border-color:#3B7DD8}
+.warcall.doc .wc-h{color:#1f5bb0}
+.warcall .wc-tag{display:inline-block;margin-top:3px;font-style:normal;font-size:13px;color:#9a4b0c;background:#fff4e5;border-radius:6px;padding:1px 7px;align-self:flex-start}
+.warcall .wc-tag.esc{color:#55408c;background:#efe9fb}
+.warcall .wc-row.s-busy{opacity:.85}
+.meets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px}
+.meet-row{display:flex;align-items:baseline;gap:8px;font-size:15px;padding:3px 0;border-bottom:1px dashed var(--line-soft)}
+.meet-row em{margin-left:auto;font-style:normal;font-size:13.5px}
+.meet-row em.ok{color:#1f7a45}.meet-row em.warn{color:#9a4b0c}
+.meet-edit{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto}
+.meet-edit label{display:flex;flex-direction:column;gap:3px;font-size:15px}
+.meet-edit input{width:100%;font-family:var(--mono);font-size:13.5px}
+@media (max-width:640px){.meets{grid-template-columns:1fr}}
+body.role-app .warcall{top:66px}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -4778,7 +4988,7 @@ main{padding:20px 16px 48px}
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793330786925') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793345858406') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
@@ -4906,11 +5116,61 @@ main{padding:20px 16px 48px}
     refreshing = false;
   }
   window.__syncRefresh = refreshNow;
+  /* 三方合併：base＝上次同步的狀態、local＝本機、remote＝試算表目前的狀態。兩邊各自改的地方都保留；
+     有 id 的清單（病人、警示、派工、視訊…）逐筆合併；無 id 的清單（量測、紀錄）取聯集；同一欄位兩邊都改時以本機為準。 */
+  const J = (x) => JSON.stringify(x);
+  const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
+  function merge3(b, l, r) {
+    if (J(l) === J(b)) return r; if (J(r) === J(b) || J(l) === J(r)) return l;
+    if (Array.isArray(l) && Array.isArray(r)) {
+      const bb = Array.isArray(b) ? b : [];
+      const withId = (a) => a.length && a.every((x) => isObj(x) && x.id != null);
+      if ((withId(l) || !l.length) && (withId(r) || !r.length) && (l.length || r.length)) {
+        const bm = new Map(bb.filter(isObj).map((x) => [x.id, x])), lm = new Map(l.map((x) => [x.id, x])), rm = new Map(r.map((x) => [x.id, x]));
+        const out = [];
+        r.forEach((x) => { if (lm.has(x.id)) out.push(merge3(bm.get(x.id), lm.get(x.id), x)); else if (!bm.has(x.id) || J(bm.get(x.id)) !== J(x)) out.push(x); });
+        l.forEach((x) => { if (!rm.has(x.id) && !(bm.has(x.id) && J(bm.get(x.id)) === J(x))) out.push(x); });
+        return out;
+      }
+      const bs = new Set(bb.map(J)), ls = new Set(l.map(J)), rs = new Set(r.map(J));
+      const out = r.filter((x) => !(bs.has(J(x)) && !ls.has(J(x))));
+      l.forEach((x) => { const k = J(x); if (!rs.has(k) && !bs.has(k)) out.push(x); });
+      return out;
+    }
+    if (isObj(l) && isObj(r)) {
+      const bo = isObj(b) ? b : {}; const out = {};
+      new Set(Object.keys(l).concat(Object.keys(r))).forEach((k) => {
+        const inL = k in l, inR = k in r, inB = k in bo;
+        if (inL && inR) out[k] = merge3(bo[k], l[k], r[k]);
+        else if (inL) { if (!(inB && J(bo[k]) === J(l[k]))) out[k] = l[k]; }
+        else if (!(inB && J(bo[k]) === J(r[k]))) out[k] = r[k];
+      });
+      return out;
+    }
+    return l;
+  }
+  window.__merge3 = merge3;
+  let resetMark = false; window.__syncResetMark = () => { resetMark = true; };
   async function flush(force) {
     if (!T) return;
     if (writing) { dirty = true; log('flush: busy, queued'); return; }
-    const json = canon(state); if (!force && json === lastSeen) { log('flush: unchanged'); return; }
-    writing = true; dirty = false; const mine = json; const ver = Math.max(localVer, (window.__remoteVer || 0)) + 1;
+    let json = canon(state); if (!force && json === lastSeen) { log('flush: unchanged'); return; }
+    writing = true; dirty = false;
+    /* 寫入前先讀：別台裝置在這之間寫過，就先合併再寫，避免同時操作互相覆蓋 */
+    const overwrite = force || resetMark; resetMark = false;
+    if (!overwrite && lastSeen) {
+      try {
+        const rm = rowsToRemote(await T.read());
+        window.__remoteVer = Math.max(window.__remoteVer || 0, rm.ver); window.__remoteBuild = Math.max(window.__remoteBuild || 0, rm.build);
+        if (rm.json && rm.json !== lastSeen && (!rm.key || typeof STORE_KEY !== 'string' || rm.key === STORE_KEY)) {
+          const merged = merge3(JSON.parse(lastSeen), JSON.parse(json), JSON.parse(rm.json));
+          UI_KEYS.forEach((k) => { merged[k] = state[k]; });
+          state = merged; if (typeof ensureBeds === 'function') ensureBeds(state.patients);
+          saveLocal(); render(); json = canon(state); window.__syncStats.merged = (window.__syncStats.merged || 0) + 1; log('merged with remote v' + rm.ver);
+        }
+      } catch (e) { log('pre-write read failed ' + ((e && e.code) || e)); }
+    }
+    const mine = json; const ver = Math.max(localVer, (window.__remoteVer || 0)) + 1;
     const chunks = []; for (let i = 0; i < COLS; i++) chunks.push(mine.slice(i * CHUNK, (i + 1) * CHUNK));
     if (mine.length > COLS * CHUNK) { setDot('err', '狀態太大（' + Math.round(mine.length / 1024) + ' KB）無法寫入試算表，請按「重設」'); writing = false; return; }
     try {
