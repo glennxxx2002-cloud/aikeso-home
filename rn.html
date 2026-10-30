@@ -3981,12 +3981,14 @@ const ENTRY_LINKS = {
 };
 const ENTRY_SUB = { war: '帳號 W001', doc: '員工編號登入', pt: '床號登入（V01–V08）', rn: '員工編號登入' };
 const roleNow = () => (typeof ROLE === 'string' && ROLE) ? ROLE : 'war';
-const PT_PUBLIC_URL_BAKED = ''; /* 院外病人端公開網址（GitHub Pages 等）；空字串＝用 claude.ai 的病人端網址 */
+const PUBLIC_BASE = 'https://glennxxx2002-cloud.github.io/aikeso-home/'; /* 院外（GitHub Pages，不需 Claude 帳號） */
+const PUBLIC_LINKS = { pt: PUBLIC_BASE + 'pt.html', doc: PUBLIC_BASE + 'doc.html', rn: PUBLIC_BASE + 'rn.html' };
+const PT_PUBLIC_URL_BAKED = PUBLIC_LINKS.pt; /* 院外病人端公開網址 */
 function ptPublicUrl() { let o = ''; try { o = localStorage.getItem('aikeso-pt-url') || ''; } catch (e) { } return o || PT_PUBLIC_URL_BAKED || ENTRY_LINKS.pt; }
 function ptLink(bed) { const u = ptPublicUrl(); const api = (window.__apiUrl && window.__apiUrl()) || ''; /* 頁面尚未寫死 API 網址時，把 API 網址帶在病人連結裡，公開頁面才連得到後端 */ return u + (u.includes('?') ? '&' : '?') + 'bed=' + encodeURIComponent(bed) + (api && !window.__apiUrlBaked ? '&api=' + encodeURIComponent(api) : ''); }
 function patientLinksPanel() {
   const api = (window.__apiUrl && window.__apiUrl()) || '';
-  let h = '<div class="note" style="margin-bottom:8px">每位病人一個連結（床號已帶入，病人只要輸入密碼）。病人<b>不需要 Claude 帳號</b>，但要兩個條件：病人端網址必須是公開可開的（claude.ai 分享給「任何知道連結的人」，或放到院方網站／GitHub Pages），且後端 API 已部署' + (api ? '（目前：已設定）' : '（<b>目前尚未設定</b>，請見「後端設定」）') + '。</div>';
+  let h = '<div class="note" style="margin-bottom:8px">每位病人一個連結（床號已帶入，病人只要輸入密碼），病人<b>不需要 Claude 帳號</b>，在一般瀏覽器或手機直接開。後端 API：' + (api ? '已設定' : '<b>尚未設定</b>（請見「後端設定」）') + '。</div>';
   h += '<div class="ptlinks">' + state.patients.map((p) => '<div class="ptlink"><b>' + esc(p.bed || '—') + '</b><span>' + esc(p.name) + '・' + esc(p.id) + '</span>' + (typeof videoQr === 'function' ? videoQr(ptLink(p.bed || p.id)) : '') + '<small class="mono">' + esc(ptLink(p.bed || p.id)) + '</small><button type="button" class="btn xs" data-copy="' + esc(ptLink(p.bed || p.id)) + '">複製</button></div>').join('') + '</div>';
   return h;
 }
@@ -4019,7 +4021,8 @@ function devicesList() {
 }
 function devicesPanel() {
   return '<div id="dev-list">' + devicesList() + '</div>' +
-    '<div class="dev-qr-t">各端入口（各自的網址與登入頁，後端同一份）・手機掃碼進入</div>' + entryQrs() +
+    '<div class="dev-qr-t">各端入口（claude.ai 網址，各自的登入頁，後端同一份）・手機掃碼進入</div>' + entryQrs() +
+    '<div class="dev-qr-t" style="margin-top:10px">院外入口（GitHub Pages，不需 Claude 帳號；病人連結見下方卡片）</div><div class="entry-qrs">' + ['doc', 'rn'].map((r) => '<div class="entry-qr entry-' + r + '"><b>' + ROLE_LABEL[r] + '・院外</b>' + (typeof videoQr === 'function' ? videoQr(PUBLIC_LINKS[r]) : '') + '<small>' + PUBLIC_LINKS[r].replace('https://', '') + '</small></div>').join('') + '</div>' +
     '<div class="note" style="margin-top:6px">合一 App（選端後登入）：<span class="mono">' + ENTRY_LINKS.app + '</span>' + (window.__syncSheetUrl ? '・共用試算表：<a href="' + window.__syncSheetUrl + '" target="_blank" rel="noopener">開啟</a>（請勿手動編輯）' : '') + '</div>' +
     '<div class="btn-row" style="margin-top:8px"><button type="button" class="btn xs" data-backend-set="1">後端設定（API 網址）</button><span class="note">通道：' + (window.__syncTransport === 'api' ? '後端 API' : window.__syncTransport === 'mcp' ? 'Google 試算表連接器' : '—') + '</span></div>';
 }
