@@ -3059,6 +3059,9 @@ function lightOf(p) {
   return { light, ev, open, dq: ev.dq || state.alerts.some((a) => a.pid === p.id && a.level === 'dq' && a.status < 4) };
 }
 const PRI = { red: 0, yellow: 1, green: 2 };
+/* 紅色警示尚無人接手（待確認）→ 戰情室病人卡片閃爍 */
+function redPending(pid) { return state.alerts.some((a) => a.pid === pid && a.level === 'red' && a.status === 0); }
+const FLASH = (pid) => (redPending(pid) ? ' flash-red' : '');
 function priority(p) {
   const L = lightOf(p); const m = latest(p);
   return PRI[L.light] * 1000 - (L.dq ? 400 : 0) - Math.min(minsAgo(m.t), 600) / 10;
@@ -3414,6 +3417,8 @@ function handoffSummary() {
 }
 /* ===================== 戰情室（指揮中心） ===================== */
 function renderWar() {
+  /* 閃爍相位跟著時鐘走：畫面重繪時不會從頭閃起 */
+  document.documentElement.style.setProperty('--flash-d', -(Date.now() % 1400) + 'ms');
   const ps = state.patients.slice();
   const lights = Object.fromEntries(ps.map((p) => [p.id, lightOf(p)]));
   const reds = ps.filter((p) => lights[p.id].light === 'red').length, yels = ps.filter((p) => lights[p.id].light === 'yellow').length, dqs = ps.filter((p) => lights[p.id].dq).length;
@@ -3440,8 +3445,8 @@ function renderWar() {
   // 優先處理清單
   let list = state.filter ? ps.filter((p) => p.pathway === state.filter) : ps;
   list = list.slice().sort((a, b) => priority(a) - priority(b));
-  h += '<div class="card"><div class="card-h"><h3>病人優先處理清單</h3><span class="sub">依燈號、趨勢惡化、量測缺失與等待時間排序' + (state.filter ? '・篩選：' + PATHWAYS[state.filter].name : '') + '</span><span class="spacer"></span>' + (state.filter ? '<button class="btn xs" data-path="">清除篩選</button>' : '') + '<span class="pill red" style="font-weight:500">紅 ' + reds + '</span><span class="pill yellow" style="font-weight:500">黃 ' + yels + '</span><span class="pill dq" style="font-weight:500">資料 ' + dqs + '</span></div><div class="scroll-x"><table class="t"><thead><tr><th>燈號</th><th>病人</th><th>路徑／Day</th><th>最新量測</th><th>判讀摘要</th><th>上傳</th><th>下一步</th><th>負責</th><th>詳情</th></tr></thead><tbody>' +
-    list.map((p) => { const L = lights[p.id], m = latest(p); const first = L.ev.reasons[0] ? L.ev.reasons[0].s : (L.dq ? L.ev.dqReasons[0] : '穩定，依計畫'); const opn = L.open[0]; return '<tr class="row" data-p="' + p.id + '"><td>' + pill(L.light, L.light === 'red' ? '紅' : L.light === 'yellow' ? '黃' : '綠') + (L.dq ? ' ' + pill('dq', '資料') : '') + '</td><td>' + patientLink(p) + '<div class="faint num" style="font-size:15px">' + p.id + '・' + p.age + p.sex + (p.bed ? '・床 ' + p.bed : '') + '</div></td><td>' + PATHWAYS[p.pathway].short + '<div class="faint" style="font-size:15px">Day ' + p.day + '/' + p.plan + '</div></td><td class="num" style="font-size:16.5px">' + vitalsInline(p) + '</td><td style="font-size:17.5px;max-width:220px">' + esc(first) + (L.ev.reasons.length > 1 ? '<span class="faint">（+' + (L.ev.reasons.length - 1) + '）</span>' : '') + '</td><td class="num" style="font-size:16.5px;white-space:nowrap">' + agoText(m.t) + '</td><td style="font-size:16.5px;white-space:nowrap">' + (opn ? stBadge(opn) : '<span class="st">' + esc(p.round.replace(/^今日 /, '')) + '</span>') + '</td><td style="font-size:16.5px;white-space:nowrap">' + staff(p.md) + '<div class="faint" style="font-size:15px">' + staff(p.rn) + '</div></td><td><button class="btn sm primary" data-case="' + p.id + '">查看詳情</button></td></tr>'; }).join('') +
+  h += '<div class="card"><div class="card-h"><h3>病人優先處理清單</h3><span class="sub">依燈號、趨勢惡化、量測缺失與等待時間排序・閃爍＝紅色警示尚無人接手' + (state.filter ? '・篩選：' + PATHWAYS[state.filter].name : '') + '</span><span class="spacer"></span>' + (state.filter ? '<button class="btn xs" data-path="">清除篩選</button>' : '') + '<span class="pill red" style="font-weight:500">紅 ' + reds + '</span><span class="pill yellow" style="font-weight:500">黃 ' + yels + '</span><span class="pill dq" style="font-weight:500">資料 ' + dqs + '</span></div><div class="scroll-x"><table class="t"><thead><tr><th>燈號</th><th>病人</th><th>路徑／Day</th><th>最新量測</th><th>判讀摘要</th><th>上傳</th><th>下一步</th><th>負責</th><th>詳情</th></tr></thead><tbody>' +
+    list.map((p) => { const L = lights[p.id], m = latest(p); const first = L.ev.reasons[0] ? L.ev.reasons[0].s : (L.dq ? L.ev.dqReasons[0] : '穩定，依計畫'); const opn = L.open[0]; return '<tr class="row' + FLASH(p.id) + '" data-p="' + p.id + '"><td>' + pill(L.light, L.light === 'red' ? '紅' : L.light === 'yellow' ? '黃' : '綠') + (L.dq ? ' ' + pill('dq', '資料') : '') + '</td><td>' + patientLink(p) + '<div class="faint num" style="font-size:15px">' + p.id + '・' + p.age + p.sex + (p.bed ? '・床 ' + p.bed : '') + '</div></td><td>' + PATHWAYS[p.pathway].short + '<div class="faint" style="font-size:15px">Day ' + p.day + '/' + p.plan + '</div></td><td class="num" style="font-size:16.5px">' + vitalsInline(p) + '</td><td style="font-size:17.5px;max-width:220px">' + esc(first) + (L.ev.reasons.length > 1 ? '<span class="faint">（+' + (L.ev.reasons.length - 1) + '）</span>' : '') + '</td><td class="num" style="font-size:16.5px;white-space:nowrap">' + agoText(m.t) + '</td><td style="font-size:16.5px;white-space:nowrap">' + (opn ? stBadge(opn) : '<span class="st">' + esc(p.round.replace(/^今日 /, '')) + '</span>') + '</td><td style="font-size:16.5px;white-space:nowrap">' + staff(p.md) + '<div class="faint" style="font-size:15px">' + staff(p.rn) + '</div></td><td><button class="btn sm primary" data-case="' + p.id + '">查看詳情</button></td></tr>'; }).join('') +
     '</tbody></table></div></div>';
   // 營運與資源
   h += '<div class="card"><div class="card-h"><h3>今日營運與資源調度</h3><span class="sub">' + taskDone + '/' + taskTotal + ' 已完成・下一批視訊查房 10:30・行動小組 A 可用／B 組出勤中</span></div><div class="card-b ops">' + state.tasks.map((t) => '<div class="op"><span>' + t.k + '</span><div class="bar"><i style="width:' + Math.round(t.done / t.total * 100) + '%"></i></div><span class="num">' + t.done + ' / ' + t.total + '</span></div>').join('') + '<div class="op"><span>Tech Pack 在線</span><div class="bar"><i style="width:' + Math.round(online / ps.length * 100) + '%"></i></div><span class="num">' + online + ' / ' + ps.length + '</span></div><div class="hr"></div><div class="legend"><span class="tag">08–09 交班</span><span class="tag">09–12 線上查房</span><span class="tag">13–17 實地訪視</span><span class="tag">18–08 on-call</span><span class="faint">一線：黃護理師（指揮中心）　二線：林醫師 on-call</span></div></div></div>';
@@ -3451,7 +3456,7 @@ function renderWar() {
   h += '</div>'; // left col
   // 右欄：警示與升級處理
   h += '<div class="grid"><div class="card"><div class="card-h"><h3>即時警示與升級處理</h3><span class="sub">依嚴重度與等待時間排序・規則 ' + RULE_VERSION + '</span><span class="spacer"></span><button class="btn xs" data-open="rules">規則</button></div><div class="card-b alist">' +
-    (open.length ? open.map((a) => { const p = P(a.pid); const s = slaState(a); return '<div class="al stripe ' + a.level + '"><div>' + pill(a.level, a.level === 'red' ? '紅' : a.level === 'yellow' ? '黃' : '資料') + '</div><div><div class="who">' + patientLink(p) + ' <span class="faint num" style="font-weight:400;font-size:16px">' + a.id + '・' + PATHWAYS[p.pathway].short + ' D' + p.day + '</span></div><div class="what">' + esc(a.text) + '</div><div class="meta"><span>' + agoText(a.at) + '</span><span class="' + (s.over ? 'over' : '') + '">' + s.text + (s.over ? '・逾時' : '') + '</span><span>' + (a.owner ? '負責 ' + staff(a.owner) : '尚無人接手') + '</span></div></div><div>' + stBadge(a) + '</div><div class="acts">' + alertActions(a, 'rn1') + '</div></div>'; }).join('') : '<div class="empty">目前沒有未解除的警示</div>') +
+    (open.length ? open.map((a) => { const p = P(a.pid); const s = slaState(a); return '<div class="al stripe ' + a.level + (a.level === 'red' && a.status === 0 ? ' flash-red' : '') + '"><div>' + pill(a.level, a.level === 'red' ? '紅' : a.level === 'yellow' ? '黃' : '資料') + '</div><div><div class="who">' + patientLink(p) + ' <span class="faint num" style="font-weight:400;font-size:16px">' + a.id + '・' + PATHWAYS[p.pathway].short + ' D' + p.day + '</span></div><div class="what">' + esc(a.text) + '</div><div class="meta"><span>' + agoText(a.at) + '</span><span class="' + (s.over ? 'over' : '') + '">' + s.text + (s.over ? '・逾時' : '') + '</span><span>' + (a.owner ? '負責 ' + staff(a.owner) : '尚無人接手') + '</span></div></div><div>' + stBadge(a) + '</div><div class="acts">' + alertActions(a, 'rn1') + '</div></div>'; }).join('') : '<div class="empty">目前沒有未解除的警示</div>') +
     '<div class="note" style="margin-top:4px">病情燈號與工作狀態分開：待確認／已接手／處理中／待重評／已解除。「已讀」不等於「已處理」；解除須經人工重評，資料品質事件不能因缺資料變綠。</div></div></div>';
   // 已解除（近 24h）
   const closed = state.alerts.filter((a) => a.status === 4).slice(-5).reverse();
@@ -4358,14 +4363,14 @@ function geoMap(){
  const ringsHtml=rings.map(k=>{const r=k*kmpx;return '<div class="geo-ring" style="width:'+r*2+'px;height:'+r*2+'px"></div><span class="geo-ringlabel" style="left:'+(C+r*0.7071).toFixed(1)+'px;top:'+(C-r*0.7071).toFixed(1)+'px">'+k+' km</span>';}).join('');
  const districts=Object.entries(GEO_DISTRICTS).filter(([k,[b,km]])=>km*kmpx<=budget+22).map(([k,[b,km]])=>{const a=b*Math.PI/180,r=km*kmpx;return '<span class="geo-district" style="left:'+(C+r*Math.sin(a)).toFixed(1)+'px;top:'+(C-r*Math.cos(a)).toFixed(1)+'px">'+k+'</span>';}).join('');
  const lines='<svg class="geo-lines" viewBox="0 0 '+GEO_SIZE+' '+GEO_SIZE+'" aria-hidden="true">'+pts.map(x=>'<line class="'+x.l.light+'" x1="'+C+'" y1="'+C+'" x2="'+x.g.x.toFixed(1)+'" y2="'+x.g.y.toFixed(1)+'"'+(x.g.unset?' stroke-dasharray="6 5"':'')+'/><circle class="'+x.l.light+'" cx="'+x.g.x.toFixed(1)+'" cy="'+x.g.y.toFixed(1)+'" r="4"/>').join('')+'</svg>';
- const pins=pts.map(x=>{const p=x.p,g=x.g;return '<button class="geo-pin '+x.l.light+(g.unset?' unset':'')+(g.x<C?' l':'')+'" data-case="'+esc(p.id)+'" style="left:'+g.x.toFixed(1)+'px;top:'+g.y.toFixed(1)+'px" aria-label="開啟 '+esc(p.name)+' '+p.id+' 個案卡（'+esc(g.district||'區域未設定')+'）"><span class="geo-stem"></span><span class="geo-head"></span><span class="geo-tag"><b>'+esc(p.name)+'</b> '+(g.km!=null?g.km.toFixed(1)+' km':'距離待確認')+'<small>'+esc(g.district||'區域未設定')+' · '+esc((PATHWAYS[p.pathway]||{}).short||p.pathway)+' · Day '+p.day+'</small></span></button>';}).join('');
+ const pins=pts.map(x=>{const p=x.p,g=x.g;return '<button class="geo-pin '+x.l.light+FLASH(p.id)+(g.unset?' unset':'')+(g.x<C?' l':'')+'" data-case="'+esc(p.id)+'" style="left:'+g.x.toFixed(1)+'px;top:'+g.y.toFixed(1)+'px" aria-label="開啟 '+esc(p.name)+' '+p.id+' 個案卡（'+esc(g.district||'區域未設定')+'）"><span class="geo-stem"></span><span class="geo-head"></span><span class="geo-tag"><b>'+esc(p.name)+'</b> '+(g.km!=null?g.km.toFixed(1)+' km':'距離待確認')+'<small>'+esc(g.district||'區域未設定')+' · '+esc((PATHWAYS[p.pathway]||{}).short||p.pathway)+' · Day '+p.day+'</small></span></button>';}).join('');
  const hospital='<div class="geo-hospital" style="left:'+C+'px;top:'+C+'px"><span class="geo-hbase"></span><span class="geo-hmark"><b>'+GEO_CENTER.short+'</b><i>✚</i><u></u></span></div>';
- const rows=sorted.map(x=>{const p=x.p,g=x.g;return '<button class="geo-row" data-case="'+esc(p.id)+'">'+pill(x.l.light,x.l.light==='dq'?'待確認':LEVEL[x.l.light].slice(0,1))+'<span class="geo-rname"><b>'+esc(p.name)+'</b><small>'+p.id+' · '+esc(g.district||'區域未設定')+' · '+esc((PATHWAYS[p.pathway]||{}).short||'')+' · '+esc(p.route==='inst'?'機構':'居家')+'</small></span><span class="geo-rdist"><b>'+(g.km!=null?g.km.toFixed(1):'—')+'</b><small>km · '+esc(staff(p.rn))+'</small></span></button>';}).join('');
+ const rows=sorted.map(x=>{const p=x.p,g=x.g;return '<button class="geo-row'+FLASH(p.id)+'" data-case="'+esc(p.id)+'">'+pill(x.l.light,x.l.light==='dq'?'待確認':LEVEL[x.l.light].slice(0,1))+'<span class="geo-rname"><b>'+esc(p.name)+'</b><small>'+p.id+' · '+esc(g.district||'區域未設定')+' · '+esc((PATHWAYS[p.pathway]||{}).short||'')+' · '+esc(p.route==='inst'?'機構':'居家')+'</small></span><span class="geo-rdist"><b>'+(g.km!=null?g.km.toFixed(1):'—')+'</b><small>km · '+esc(staff(p.rn))+'</small></span></button>';}).join('');
  return '<section class="tw-gallery geo"><div class="tw-heading"><div><h2>病人 3D 地圖分佈</h2><p>以中國醫藥大學附設醫院總院為中心，依住址行政區與返院距離標示在案病人；拖曳可旋轉與調整俯角，點選標記開啟個案卡</p></div><span>虛構個案・模擬座標｜'+ps.length+' 位・最遠 '+far.toFixed(1)+' km</span></div>'+
  '<div class="geo-wrap"><div class="geo-stage" id="geo-stage"><div class="geo-plane'+(GEO_VIEW.rx<=5?' flat':'')+'" style="--rx:'+GEO_VIEW.rx+'deg;--rz:'+GEO_VIEW.rz+'deg"><div class="geo-grid"></div>'+ringsHtml+lines+districts+pins+hospital+'<span class="geo-north">N</span></div>'+
  '<div class="geo-ctl"><button type="button" data-geo="tilt" aria-pressed="'+(GEO_VIEW.rx>5)+'">3D 俯瞰</button><button type="button" data-geo="flat" aria-pressed="'+(GEO_VIEW.rx<=5)+'">2D 平面</button><label>旋轉 <input type="range" min="-180" max="180" value="'+GEO_VIEW.rz+'" data-geo="rz" aria-label="旋轉地圖"></label><button type="button" data-geo="reset">重設</button></div>'+
  '<div class="geo-center">中心：<b>'+GEO_CENTER.name+'</b>（'+GEO_CENTER.addr+'）</div>'+
- '<div class="geo-legend"><span><i class="red"></i>紅 '+counts.red+'</span><span><i class="yellow"></i>黃 '+counts.yellow+'</span><span><i class="green"></i>綠 '+counts.green+'</span><span><i class="dq"></i>待確認 '+(counts.dq||0)+'</span><span>同心圓每 '+step+' 公里</span></div></div>'+
+ '<div class="geo-legend"><span><i class="red"></i>紅 '+counts.red+'</span><span><i class="yellow"></i>黃 '+counts.yellow+'</span><span><i class="green"></i>綠 '+counts.green+'</span><span><i class="dq"></i>待確認 '+(counts.dq||0)+'</span>'+(pts.some(x=>redPending(x.p.id))?'<span class="geo-flash-key"><i class="red"></i>閃爍＝紅色未接手 '+pts.filter(x=>redPending(x.p.id)).length+'</span>':'')+'<span>同心圓每 '+step+' 公里</span></div></div>'+
  '<aside class="geo-side"><h3>返院距離排序<small>近 → 遠</small></h3>'+rows+'</aside></div>'+
  '<p class="tw-foot">座標為示意：依住址行政區的概略方位與模擬公里數放置，非實際地理定位；行政區標籤亦為版面示意。正式版由戰情室資料層提供去識別後的地理編碼與路線距離，住址只顯示於有權限的照護人員畫面。</p></section>';
 }
@@ -4921,6 +4926,26 @@ main{padding:20px 16px 48px}
 .meet-edit input{width:100%;font-family:var(--mono);font-size:13.5px}
 @media (max-width:640px){.meets{grid-template-columns:1fr}}
 body.role-app .warcall{top:66px}
+
+/* 戰情室：紅色警示尚無人接手 → 病人卡片閃爍（任何裝置按「接手」後停止） */
+@keyframes redFlashCard{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 3px var(--red),0 0 18px 2px color-mix(in srgb,var(--red) 55%,transparent);background-color:color-mix(in srgb,var(--red) 16%,transparent)}}
+@keyframes redFlashRow{0%,100%{background-color:transparent}50%{background-color:color-mix(in srgb,var(--red) 22%,transparent);box-shadow:inset 5px 0 0 var(--red)}}
+@keyframes redFlashMap{0%,100%{}50%{background-color:#6e1a22;border-color:#ff5c5c;box-shadow:0 0 0 2px #ff5c5c99,0 0 18px #ff5c5c}}
+@keyframes redFlashSide{0%,100%{background-color:transparent}50%{background-color:#5a1820;box-shadow:inset 0 0 0 2px #ff5c5c}}
+.al.flash-red{animation:redFlashCard 1.4s ease-in-out infinite;animation-delay:var(--flash-d,0s)}
+table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;animation-delay:var(--flash-d,0s)}
+.geo-pin.flash-red .geo-tag{animation:redFlashMap 1.4s ease-in-out infinite;animation-delay:var(--flash-d,0s)}
+.geo-pin.flash-red .geo-head{transform:scale(1.25)}
+.geo-row.flash-red{animation:redFlashSide 1.4s ease-in-out infinite;animation-delay:var(--flash-d,0s)}
+.geo-flash-key{color:#ffb3b3;font-weight:600}
+.geo-flash-key i.red{background:#ff5c5c;animation:redFlashSide 1.4s ease-in-out infinite;animation-delay:var(--flash-d,0s)}
+@media (max-width:760px){table.t tbody tr.row.flash-red{animation-name:redFlashCard}} /* 手機：清單列變卡片，用外框發光 */
+@media (prefers-reduced-motion: reduce){
+  .al.flash-red{box-shadow:0 0 0 3px var(--red)}
+  table.t tbody tr.row.flash-red{background-color:color-mix(in srgb,var(--red) 18%,transparent);box-shadow:inset 5px 0 0 var(--red)}
+  .geo-pin.flash-red .geo-tag{background-color:#6e1a22;border-color:#ff5c5c}
+  .geo-row.flash-red{background-color:#5a1820;box-shadow:inset 0 0 0 2px #ff5c5c}
+}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -4938,7 +4963,7 @@ body.role-app .warcall{top:66px}
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793350759930') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793585110397') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
