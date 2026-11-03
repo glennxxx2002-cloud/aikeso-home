@@ -164,6 +164,7 @@ details.acc .acc-b{padding:0 12px 12px;font-size:18.5px;line-height:1.65}
 .scrim.on{display:block}
 .modal{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(10,16,24,.45);padding:20px}
 .modal.on{display:flex}
+.aibox{border:1.5px dashed var(--accent);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--accent-soft)}.aibox-h{font-weight:700;color:var(--accent-ink);margin-bottom:6px;font-size:17px}.aibox-h .faint{font-weight:400;font-size:14px;margin-left:6px}.ai-fill{background:#FFF4C2!important;border-color:#E2B93B!important}
 .call119{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:#b01f1f;padding:24px;color:#fff;text-align:center}.call119.on{display:flex}.c119{max-width:520px;width:100%}.c119-h{font-size:36px;font-weight:800;line-height:1.25;margin-bottom:12px}.c119-s{font-size:19.5px;line-height:1.6;margin-bottom:18px}.c119-btn{display:block;width:100%;background:#fff;color:#b91c1c;font-size:32px;font-weight:800;padding:22px 16px;border-radius:18px;border:0;margin-bottom:14px;cursor:pointer}.c119-n{font-size:17px;line-height:1.65;opacity:.95;margin-bottom:18px}.c119-x{background:transparent;border:1.5px solid rgba(255,255,255,.7);color:#fff;border-radius:12px;padding:12px 18px;font-size:17px;cursor:pointer}
 .modal .m{background:var(--surface);border-radius:12px;width:min(720px,100%);max-height:90vh;overflow:auto;box-shadow:var(--shadow)}
 .modal .m-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line-soft)}
@@ -332,7 +333,7 @@ body{overflow-x:hidden}
     <button role="tab" data-tab="rn" aria-selected="false">到府派工 App</button>
   </div>
   <span class="clock" id="clock"></span>
-  <button class="tb-btn" id="btn-time" title="推進模擬時間 30 分鐘（影響回應時限與資料品質判定）">⏩ +30<span class="tb-x"> 分</span></button>
+  <button class="tb-btn" id="btn-time" title="示範用：把時間往後位移 30 分鐘（影響回應時限與資料品質判定）；重設後回到真實時間">⏩ +30<span class="tb-x"> 分</span></button>
   <button class="tb-btn" id="btn-about">關於原型</button>
   <button class="tb-btn" id="btn-reset" title="重設示範資料（所有同步中的裝置一起重設）">重設</button>
   <span class="sync-wrap" id="sync-wrap" title="同步狀態"><span class="sync-dot off" id="sync-dot"></span><span class="sync-txt" id="sync-txt"></span><span class="dev-chip" id="dev-chip"></span></span>
@@ -2653,11 +2654,9 @@ var qrcode = function() {
 /* 單一角色頁：此頁固定顯示 醫師端，不提供切換 */
 const ROLE = 'doc';
 /* ===================== 示範資料（全部虛構） ===================== */
-const DEMO_NOW = new Date('2026-11-24T10:24:00+08:00'); /* 示範資料原本的「現在」 */
-const NOW0 = new Date(); /* 真實時間：所有相對時間（ago／hrs）以載入當下為基準 */
-const DEMO_DAY_SHIFT = Math.round((NOW0.getTime() - DEMO_NOW.getTime()) / 86400000);
-function shiftDemoDates(o) { if (Array.isArray(o)) { o.forEach((v, i) => { if (typeof v === 'string') o[i] = shiftDateStr(v); else if (v && typeof v === 'object') shiftDemoDates(v); }); return o; } if (o && typeof o === 'object') { Object.keys(o).forEach((k) => { const v = o[k]; if (typeof v === 'string') o[k] = shiftDateStr(v); else if (v && typeof v === 'object') shiftDemoDates(v); }); } return o; }
-function shiftDateStr(s) { if (!/^2026-\d{2}-\d{2}$/.test(s)) return s; const d = new Date(s + 'T00:00:00+08:00'); d.setTime(d.getTime() + DEMO_DAY_SHIFT * 86400000); const t = new Date(d.getTime() + 8 * 3600000); return t.toISOString().slice(0, 10); }
+const DEMO_T0 = new Date('2026-11-24T10:24:00+08:00'); /* 原示範時點：示範資料的相對時間以此換算 */
+const NOW0 = new Date(); /* V3_12：真實時間。示範資料的「幾小時前」「今日 HH:MM」「日期」都以載入時刻換算 */
+const DSTR = (k) => { const d = new Date(NOW0.getTime() - k * 86400000); const t = new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000); return (t.getMonth() + 1) + '/' + t.getDate(); };
 const MIN = 60000, H = 3600000;
 const ago = (min) => new Date(NOW0.getTime() - min * MIN).toISOString();
 const hrs = (h) => ago(h * 60);
@@ -2668,8 +2667,12 @@ const PATHWAYS = {
   SSTI: { name: '皮膚軟組織感染', short: '蜂窩組織炎', color: 'p3', watch: '紅腫範圍・疼痛・傷口照片・體溫', tempMax: 38.0 },
   HF: { name: '心衰竭（延伸路徑）', short: '心衰竭', color: 'p4', watch: '體重・水腫・端坐呼吸・BP/HR・用藥', tempMax: 38.0 },
 };
+const A1_ENABLED = true; /* 11/03：A1 三模組（壓傷分期草稿、語音護理紀錄、化療副作用追蹤）；示範版，AI 輸出皆為草稿 */
+const CHEMO_ENABLED = A1_ENABLED; /* 在家化療為新服務線（非健保 HaH），需腫瘤科主責與給付來源 */
 const HF_ENABLED = false; /* 10/29 決議：心衰竭路徑暫停、Phase 2 重啟；規則與畫面保留，重啟只改這裡 */
 if (!HF_ENABLED) delete PATHWAYS.HF;
+PATHWAYS.CHEMO = { name: '在家化療（副作用追蹤，示範）', short: '在家化療', color: 'p5', watch: '體溫・口腔／攝食・噁心嘔吐腹瀉・出血・活動', tempMax: 38.0 };
+if (!CHEMO_ENABLED) delete PATHWAYS.CHEMO;
 const ROUTES = { early: '提早出院模式', ed: '急診個案', inst: '住宿式機構住民', home: '居家醫療個案' };
 const STAFF = {
   md1: { name: '林醫師', role: '主責醫師' }, md2: { name: '陳醫師', role: '主責醫師' }, md3: { name: '張醫師', role: '主責醫師' }, md4: { name: '黃家崙醫師', role: '主責醫師' }, md5: { name: '王俊琪醫師', role: '主責醫師' },
@@ -2682,12 +2685,12 @@ function mk(o) { return Object.assign({ conscious: '清醒', o2: 0, source: 'L2 
 const PATIENTS_SEED = [
   {
     id: 'AK-012', name: '王○○', age: 69, sex: '男', pathway: 'PNA', dx: '社區型肺炎（右下葉）', route: 'early', dept: '胸腔內科',
-    admit: '2026-11-19', discharge: '2026-11-21', day: 3, plan: 10, tech: 'L2', barthel: 70,
+    admit: DSTR(5), discharge: DSTR(3), day: 3, plan: 10, tech: 'L2', barthel: 70,
     md: 'md1', backup: 'md2', rn: 'rn2', addr: '北區', comorb: ['高血壓', '第 2 型糖尿病'],
-    b0: { sbp: 128, dbp: 76, hr: 84, rr: 20, spo2: 95, temp: 36.8, o2: 0, glucose: 154, note: '出院日 11/21 14:00，室內空氣，坐姿；早餐後血糖 154' },
+    b0: { sbp: 128, dbp: 76, hr: 84, rr: 20, spo2: 95, temp: 36.8, o2: 0, glucose: 154, note: '出院日 ' + DSTR(3) + ' 14:00，室內空氣，坐姿；早餐後血糖 154' },
     targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 92, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70 },
-    tx: 'Ceftriaxone 2 g IV q24h（D3/7）；Acetaminophen prn', labs: '11/21 WBC 11.2、CRP 6.8；今日尚無追蹤檢驗；無影像追蹤',
+    tx: 'Ceftriaxone 2 g IV q24h（D3/7）；Acetaminophen prn', labs: '' + DSTR(3) + ' WBC 11.2、CRP 6.8；今日尚無追蹤檢驗；無影像追蹤',
     freq: '每日 3 次（08/14/20）＋症狀變化時', nextVisit: '今日 15:00 護理到府（IV 抗生素）', round: '今日 10:30 視訊查房',
     ms: [
       mk({ t: hrs(62), sbp: 126, dbp: 78, hr: 86, rr: 20, spo2: 95, temp: 36.9 }),
@@ -2700,12 +2703,12 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-027', name: '陳○○', age: 76, sex: '女', pathway: 'HF', dx: '心衰竭急性後期（HFrEF, EF 32%）', route: 'early', dept: '心臟內科',
-    admit: '2026-11-13', discharge: '2026-11-19', day: 5, plan: 14, tech: 'L2', barthel: 55,
+    admit: DSTR(11), discharge: DSTR(5), day: 5, plan: 14, tech: 'L2', barthel: 55,
     md: 'md2', backup: 'md1', rn: 'rn3', addr: '西屯區', comorb: ['心房顫動', '慢性腎病 3b'],
-    b0: { sbp: 134, dbp: 80, hr: 88, rr: 18, spo2: 96, temp: 36.6, o2: 0, weight: 58.0, note: '出院日 11/19 11:00，晨起空腹體重 58.0 kg' },
+    b0: { sbp: 134, dbp: 80, hr: 88, rr: 18, spo2: 96, temp: 36.6, o2: 0, weight: 58.0, note: '出院日 ' + DSTR(5) + ' 11:00，晨起空腹體重 58.0 kg' },
     targets: { sbp: [100, 150], hr: [55, 100], rrMax: 22, spo2Min: 93, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3, dWt: 1.5 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, dWtRed: 2.0, glucoseMin: 70 }, b0Custom: 'CHF',
-    tx: 'Furosemide 40 mg bid；Sacubitril/valsartan；Bisoprolol；Apixaban', labs: '11/19 BNP 680、Cr 1.6；今日尚無追蹤',
+    tx: 'Furosemide 40 mg bid；Sacubitril/valsartan；Bisoprolol；Apixaban', labs: '' + DSTR(5) + ' BNP 680、Cr 1.6；今日尚無追蹤',
     freq: '每日 2 次（08/20）＋每日晨起體重', nextVisit: '今日 13:30 護理到府（抽血 BNP/Cr）', round: '今日 11:00 視訊查房',
     ms: [
       mk({ t: hrs(98), sbp: 136, dbp: 82, hr: 86, rr: 18, spo2: 96, temp: 36.6, weight: 58.1 }),
@@ -2717,12 +2720,12 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-019', name: '林○○', age: 74, sex: '女', pathway: 'UTI', dx: '急性腎盂腎炎', route: 'ed', dept: '急診醫學部',
-    admit: '2026-11-22', discharge: '2026-11-22', day: 2, plan: 7, tech: 'L2', barthel: 45,
+    admit: DSTR(2), discharge: DSTR(2), day: 2, plan: 7, tech: 'L2', barthel: 45,
     md: 'md3', backup: 'md1', rn: 'rn2', addr: '北屯區', comorb: ['失智症', '骨質疏鬆'],
-    b0: { sbp: 132, dbp: 78, hr: 86, rr: 18, spo2: 97, temp: 37.4, o2: 0, note: '急診收案 11/22 20:00，退燒後量測' },
+    b0: { sbp: 132, dbp: 78, hr: 86, rr: 18, spo2: 97, temp: 37.4, o2: 0, note: '急診收案 ' + DSTR(2) + ' 20:00，退燒後量測' },
     targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 92, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70 },
-    tx: 'Ceftriaxone 2 g IV q24h（D2/7）；尿液培養 pending', labs: '11/22 WBC 15.8、CRP 12.1、Cr 1.1；尿培養 pending',
+    tx: 'Ceftriaxone 2 g IV q24h（D2/7）；尿液培養 pending', labs: '' + DSTR(2) + ' WBC 15.8、CRP 12.1、Cr 1.1；尿培養 pending',
     freq: '每日 3 次（08/14/20）', nextVisit: '今日 14:00 護理到府（IV 抗生素、觀察攝食）', round: '今日 10:45 視訊查房',
     ms: [
       mk({ t: hrs(36), sbp: 130, dbp: 76, hr: 88, rr: 18, spo2: 97, temp: 37.5, source: '手動（照顧者）' }),
@@ -2733,12 +2736,12 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-008', name: '張○○', age: 63, sex: '男', pathway: 'SSTI', dx: '左小腿蜂窩組織炎', route: 'early', dept: '感染科',
-    admit: '2026-11-18', discharge: '2026-11-20', day: 4, plan: 7, tech: 'L1', barthel: 85,
+    admit: DSTR(6), discharge: DSTR(4), day: 4, plan: 7, tech: 'L1', barthel: 85,
     md: 'md1', backup: 'md3', rn: 'rn4', addr: '南屯區', comorb: ['第 2 型糖尿病'],
-    b0: { sbp: 130, dbp: 82, hr: 80, rr: 16, spo2: 97, temp: 36.9, o2: 0, note: '出院日 11/20 15:00；紅腫範圍 12×9 cm（標記）' },
+    b0: { sbp: 130, dbp: 82, hr: 80, rr: 16, spo2: 97, temp: 36.9, o2: 0, note: '出院日 ' + DSTR(4) + ' 15:00；紅腫範圍 12×9 cm（標記）' },
     targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 92, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70 },
-    tx: 'Cefazolin 1 g IV q8h（D4/7）', labs: '11/20 WBC 12.4、CRP 8.2；11/23 CRP 5.9',
+    tx: 'Cefazolin 1 g IV q8h（D4/7）', labs: '' + DSTR(4) + ' WBC 12.4、CRP 8.2；' + DSTR(1) + ' CRP 5.9',
     freq: '每日 2 次（08/20）＋每日傷口照片', nextVisit: '今日 10:55 護理到府（ETA 30 分，傷口評估）', round: '今日 11:30 視訊查房',
     ms: [
       mk({ t: hrs(86), sbp: 132, dbp: 82, hr: 82, rr: 16, spo2: 97, temp: 37.0, source: 'L1 藍牙' }),
@@ -2750,12 +2753,12 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-023', name: '李○○', age: 71, sex: '男', pathway: 'PNA', dx: '社區型肺炎（左下葉）', route: 'early', dept: '胸腔內科',
-    admit: '2026-11-18', discharge: '2026-11-20', day: 4, plan: 10, tech: 'L2', barthel: 75,
+    admit: DSTR(6), discharge: DSTR(4), day: 4, plan: 10, tech: 'L2', barthel: 75,
     md: 'md1', backup: 'md2', rn: 'rn3', addr: '西區', comorb: ['COPD'],
-    b0: { sbp: 124, dbp: 74, hr: 82, rr: 20, spo2: 93, temp: 37.0, o2: 1, note: '出院日 11/20；O₂ 1 L/min 鼻導管（COPD 基線）' },
+    b0: { sbp: 124, dbp: 74, hr: 82, rr: 20, spo2: 93, temp: 37.0, o2: 1, note: '出院日 ' + DSTR(4) + '；O₂ 1 L/min 鼻導管（COPD 基線）' },
     targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 91, tempMax: 38.0, o2Max: 2, dSbp: 20, dHr: 20, dSpo2: 3 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70 }, b0Custom: 'COPD',
-    tx: 'Ceftriaxone 2 g IV q24h（D4/7）＋ Azithromycin', labs: '11/23 WBC 8.9、CRP 3.1（改善）',
+    tx: 'Ceftriaxone 2 g IV q24h（D4/7）＋ Azithromycin', labs: '' + DSTR(1) + ' WBC 8.9、CRP 3.1（改善）',
     freq: '每日 3 次（08/14/20）', nextVisit: '今日 16:00 護理到府', round: '今日 10:30 視訊查房',
     ms: [
       mk({ t: hrs(86), sbp: 122, dbp: 72, hr: 84, rr: 22, spo2: 92, temp: 37.4, o2: 1 }),
@@ -2768,12 +2771,12 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-005', name: '吳○○', age: 75, sex: '女', pathway: 'HF', dx: '心衰竭急性後期（HFpEF）', route: 'early', dept: '心臟內科',
-    admit: '2026-11-11', discharge: '2026-11-17', day: 7, plan: 14, tech: 'L2', barthel: 65,
+    admit: DSTR(13), discharge: DSTR(7), day: 7, plan: 14, tech: 'L2', barthel: 65,
     md: 'md2', backup: 'md3', rn: 'rn3', addr: '大里區', comorb: ['高血壓', '慢性腎病 3a'],
-    b0: { sbp: 138, dbp: 82, hr: 76, rr: 18, spo2: 96, temp: 36.5, o2: 0, weight: 62.4, note: '出院日 11/17；晨起體重 62.4 kg' },
+    b0: { sbp: 138, dbp: 82, hr: 76, rr: 18, spo2: 96, temp: 36.5, o2: 0, weight: 62.4, note: '出院日 ' + DSTR(7) + '；晨起體重 62.4 kg' },
     targets: { sbp: [100, 150], hr: [55, 100], rrMax: 22, spo2Min: 93, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3, dWt: 1.5 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, dWtRed: 2.0, glucoseMin: 70 }, b0Custom: 'CHF',
-    tx: 'Furosemide 20 mg qd；Empagliflozin；Losartan', labs: '11/22 BNP 310（較出院 520 下降）',
+    tx: 'Furosemide 20 mg qd；Empagliflozin；Losartan', labs: '' + DSTR(2) + ' BNP 310（較出院 520 下降）',
     freq: '每日 2 次（08/20）＋每日晨起體重', nextVisit: '明日 10:00 復健師到府', round: '今日 11:15 視訊查房',
     ms: [
       mk({ t: hrs(86), sbp: 136, dbp: 80, hr: 78, rr: 18, spo2: 96, temp: 36.5, weight: 62.6 }),
@@ -2785,12 +2788,12 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-016', name: '黃○○', age: 59, sex: '女', pathway: 'UTI', dx: '複雜性泌尿道感染', route: 'early', dept: '腎臟內科',
-    admit: '2026-11-20', discharge: '2026-11-21', day: 3, plan: 7, tech: 'L1', barthel: 90,
+    admit: DSTR(4), discharge: DSTR(3), day: 3, plan: 7, tech: 'L1', barthel: 90,
     md: 'md3', backup: 'md2', rn: 'rn4', addr: '東區', comorb: ['第 2 型糖尿病'],
-    b0: { sbp: 118, dbp: 72, hr: 78, rr: 16, spo2: 98, temp: 37.0, o2: 0, note: '出院日 11/21 16:00' },
+    b0: { sbp: 118, dbp: 72, hr: 78, rr: 16, spo2: 98, temp: 37.0, o2: 0, note: '出院日 ' + DSTR(3) + ' 16:00' },
     targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 92, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70 },
-    tx: 'Ertapenem 1 g IV q24h（D3/7）', labs: '11/23 WBC 9.4、CRP 4.0（改善）；尿培養 ESBL E. coli',
+    tx: 'Ertapenem 1 g IV q24h（D3/7）', labs: '' + DSTR(1) + ' WBC 9.4、CRP 4.0（改善）；尿培養 ESBL E. coli',
     freq: '每日 2 次（08/20）', nextVisit: '今日 12:00 護理到府（IV 抗生素）', round: '今日 11:45 視訊查房',
     ms: [
       mk({ t: hrs(62), sbp: 120, dbp: 74, hr: 80, rr: 16, spo2: 98, temp: 37.2, source: 'L1 藍牙' }),
@@ -2801,13 +2804,13 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-030', name: '劉○○', age: 66, sex: '男', pathway: 'SSTI', dx: '右前臂蜂窩組織炎', route: 'early', dept: '感染科',
-    admit: '2026-11-22', discharge: '2026-11-23', day: 1, plan: 7, tech: 'L1', barthel: 95,
+    admit: DSTR(2), discharge: DSTR(1), day: 1, plan: 7, tech: 'L1', barthel: 95,
     md: 'md3', backup: 'md1', rn: 'rn4', addr: '太平區', comorb: [],
-    b0: { sbp: 134, dbp: 84, hr: 78, rr: 16, spo2: 98, temp: 37.1, o2: 0, note: '出院日 11/23 17:00；紅腫範圍 8×6 cm（標記）' },
+    b0: { sbp: 134, dbp: 84, hr: 78, rr: 16, spo2: 98, temp: 37.1, o2: 0, note: '出院日 ' + DSTR(1) + ' 17:00；紅腫範圍 8×6 cm（標記）' },
     targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 92, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70 },
-    tx: 'Cefazolin 1 g IV q8h（D1/7）', labs: '11/22 WBC 13.0、CRP 7.5',
-    freq: '每日 2 次（08/20）＋每日傷口照片', nextVisit: '今日 13:00 護理到府（首訪已完成 11/23）', round: '今日 12:00 視訊查房',
+    tx: 'Cefazolin 1 g IV q8h（D1/7）', labs: '' + DSTR(2) + ' WBC 13.0、CRP 7.5',
+    freq: '每日 2 次（08/20）＋每日傷口照片', nextVisit: '今日 13:00 護理到府（首訪已完成 ' + DSTR(1) + '）', round: '今日 12:00 視訊查房',
     ms: [
       mk({ t: hrs(17), sbp: 132, dbp: 82, hr: 80, rr: 16, spo2: 98, temp: 37.2, source: 'L1 藍牙' }),
       mk({ t: hrs(9.3), sbp: 130, dbp: 82, hr: 80, rr: 16, spo2: 98, temp: 37.0, source: 'L1 藍牙' }),
@@ -2816,12 +2819,12 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-031', name: '蔡○○', age: 82, sex: '女', pathway: 'PNA', dx: '吸入性肺炎', route: 'inst', dept: '家庭醫學科',
-    admit: '2026-11-22', discharge: '2026-11-22', day: 2, plan: 10, tech: 'L1', barthel: 20,
+    admit: DSTR(2), discharge: DSTR(2), day: 2, plan: 10, tech: 'L1', barthel: 20,
     md: 'md1', backup: 'md3', rn: 'rn2', addr: '合作護理之家', comorb: ['中風後遺症', '吞嚥困難'],
-    b0: { sbp: 126, dbp: 70, hr: 84, rr: 20, spo2: 95, temp: 37.3, o2: 0, note: '機構收案 11/22 15:00；機構護理協助量測' },
+    b0: { sbp: 126, dbp: 70, hr: 84, rr: 20, spo2: 95, temp: 37.3, o2: 0, note: '機構收案 ' + DSTR(2) + ' 15:00；機構護理協助量測' },
     targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 92, tempMax: 38.0, o2Max: 2, dSbp: 20, dHr: 20, dSpo2: 3 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70 },
-    tx: 'Ampicillin/sulbactam 3 g IV q6h（D2/7）', labs: '11/22 WBC 13.6、CRP 9.0',
+    tx: 'Ampicillin/sulbactam 3 g IV q6h（D2/7）', labs: '' + DSTR(2) + ' WBC 13.6、CRP 9.0',
     freq: '每日 3 次（機構護理）', nextVisit: '今日 15:30 護理到機構', round: '今日 11:00 視訊查房（機構護理協助）',
     ms: [
       mk({ t: hrs(38), sbp: 128, dbp: 72, hr: 86, rr: 20, spo2: 95, temp: 37.4, source: '手動（機構護理）' }),
@@ -2832,18 +2835,33 @@ const PATIENTS_SEED = [
   },
   {
     id: 'AK-033', name: '許○○', age: 68, sex: '男', pathway: 'UTI', dx: '泌尿道感染（長期導尿管）', route: 'home', dept: '家庭醫學科',
-    admit: '2026-11-18', discharge: '2026-11-18', day: 6, plan: 7, tech: 'L1', barthel: 30,
+    admit: DSTR(6), discharge: DSTR(6), day: 6, plan: 7, tech: 'L1', barthel: 30,
     md: 'md3', backup: 'md2', rn: 'rn3', addr: '烏日區', comorb: ['脊髓損傷', '神經性膀胱'],
-    b0: { sbp: 122, dbp: 74, hr: 74, rr: 16, spo2: 97, temp: 37.0, o2: 0, note: '居家醫療個案收案 11/18' },
+    b0: { sbp: 122, dbp: 74, hr: 74, rr: 16, spo2: 97, temp: 37.0, o2: 0, note: '居家醫療個案收案 ' + DSTR(6) + '' },
     targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 92, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3 },
     critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70 },
-    tx: 'Ceftriaxone 1 g IV q24h（D6/7）；已更換導尿管', labs: '11/22 WBC 7.8、CRP 1.9（正常化）',
+    tx: 'Ceftriaxone 1 g IV q24h（D6/7）；已更換導尿管', labs: '' + DSTR(2) + ' WBC 7.8、CRP 1.9（正常化）',
     freq: '每日 2 次（08/20）', nextVisit: '明日 09:30 醫師結案實地訪視', round: '今日 12:15 視訊查房',
     ms: [
       mk({ t: hrs(62), sbp: 120, dbp: 72, hr: 76, rr: 16, spo2: 97, temp: 36.9, source: 'L1 藍牙' }),
       mk({ t: hrs(38), sbp: 122, dbp: 74, hr: 74, rr: 16, spo2: 97, temp: 36.8, source: 'L1 藍牙' }),
       mk({ t: hrs(14), sbp: 120, dbp: 74, hr: 72, rr: 16, spo2: 98, temp: 36.8, source: 'L1 藍牙' }),
       mk({ t: ago(40), sbp: 122, dbp: 74, hr: 74, rr: 16, spo2: 97, temp: 36.9, source: 'L1 藍牙' }),
+    ],
+  },
+  {
+    id: 'AK-036', name: '鄭○○', age: 58, sex: '女', pathway: 'CHEMO', dx: '乳癌輔助化療第 2 週期（居家口服 capecitabine）', route: 'home', dept: '血液腫瘤科',
+    admit: DSTR(2), discharge: DSTR(2), day: 3, plan: 21, tech: 'L1', barthel: 100,
+    md: 'md1', backup: 'md3', rn: 'rn4', addr: '西屯區', comorb: [],
+    b0: { sbp: 118, dbp: 72, hr: 78, rr: 16, spo2: 98, temp: 36.8, o2: 0, note: '化療週期開始日居家收案 ' + DSTR(2) + '，坐姿' },
+    targets: { sbp: [100, 150], hr: [55, 110], rrMax: 24, spo2Min: 92, tempMax: 38.0, o2Max: 0, dSbp: 20, dHr: 20, dSpo2: 3 },
+    critical: { sbpMin: 90, hrMax: 130, hrMin: 50, spo2Min: 90, rrMax: 30, tempMin: 36.0, glucoseMin: 70, feverRed: 38.0 },
+    tx: 'Capecitabine 1,250 mg/m² bid D1–14（口服）；止吐藥 prn；發燒 ≥38.0 → 返院抽血 CBC/ANC', labs: '' + DSTR(2) + ' ANC 2,100、Hb 11.8、Plt 180k',
+    freq: '每日 2 次（08/20）＋每日症狀回報', nextVisit: '今日 14:30 護理到府（口腔與皮膚檢視）', round: '今日 15:00 視訊查房',
+    ms: [
+      mk({ t: hrs(50), sbp: 120, dbp: 74, hr: 80, rr: 16, spo2: 98, temp: 36.8, source: 'L1 藍牙' }),
+      mk({ t: hrs(26), sbp: 118, dbp: 72, hr: 82, rr: 16, spo2: 98, temp: 37.0, source: 'L1 藍牙', symptoms: ['有但可忍受'] }),
+      mk({ t: hrs(2), sbp: 116, dbp: 70, hr: 84, rr: 18, spo2: 97, temp: 37.4, source: 'L1 藍牙' }),
     ],
   },
 ];
@@ -2875,12 +2893,13 @@ const PATH_TEMPLATES = {
   UTI: { targets: { ...COMMON_TARGETS }, critical: { ...COMMON_CRITICAL }, tx: 'Ceftriaxone 2 g IV q24h（D1/7）；尿液培養追蹤', freq: '每日 3 次（08/14/20）', plan: 7 },
   SSTI: { targets: { ...COMMON_TARGETS }, critical: { ...COMMON_CRITICAL }, tx: 'Cefazolin 1 g IV q8h（D1/7）', freq: '每日 2 次（08/20）＋每日傷口照片', plan: 7 },
   HF: { targets: { ...COMMON_TARGETS, dWt: 1.5 }, critical: { ...COMMON_CRITICAL, dWtRed: 2.0 }, tx: '依心臟科個別計畫：利尿劑調整、GDMT 維持', freq: '每日 2 次（08/20）＋每日晨起體重', plan: 14 },
+  CHEMO: { targets: { ...COMMON_TARGETS }, critical: { ...COMMON_CRITICAL, feverRed: 38.0 }, tx: '依腫瘤科處方：居家口服化療；G-CSF 依醫囑；發燒 ≥38.0 視為發熱性嗜中性球低下，啟動返院綠色通道', freq: '每日 2 次（08/20）＋每日症狀回報', plan: 21 },
 };
 const CANDIDATES_SEED = [
-  { id: 'C-201', name: '楊○○', age: 72, sex: '男', pathway: 'PNA', dx: '社區型肺炎（左下葉）', dept: '胸腔內科', ward: '12A-08', route: 'early', hospDay: 3, barthel: 65, comorb: ['高血壓'], vitals: { sbp: 132, dbp: 78, hr: 88, rr: 20, spo2: 94, temp: 37.2, o2: 0 }, reason: 'HIS 標記：感染症住院第 3 天、退燒 48 小時、口服可耐受、需 IV 抗生素續療 → 提早出院候選', labs: '11/23 WBC 10.8、CRP 5.2（下降）', status: 'new', addr: '北區' },
-  { id: 'C-202', name: '周○○', age: 58, sex: '女', pathway: 'SSTI', dx: '右下肢蜂窩組織炎', dept: '感染科', ward: '9B-21', route: 'early', hospDay: 2, barthel: 90, comorb: ['第 2 型糖尿病'], vitals: { sbp: 128, dbp: 80, hr: 84, rr: 16, spo2: 98, temp: 37.0, o2: 0 }, reason: 'HIS 標記：SSTI 住院第 2 天、CRP 下降、需 IV 抗生素 5 天、自理能力佳', labs: '11/23 WBC 11.9、CRP 6.1', status: 'new', addr: '西屯區' },
-  { id: 'C-203', name: '邱○○', age: 80, sex: '女', pathway: 'UTI', dx: '急性腎盂腎炎', dept: '急診醫學部', ward: 'ED-14', route: 'ed', hospDay: 0, barthel: 40, comorb: ['第 2 型糖尿病', '慢性腎病 3a'], vitals: { sbp: 138, dbp: 82, hr: 90, rr: 18, spo2: 96, temp: 38.0, o2: 0 }, reason: '急診：巴氏量表 40 符合條款二；需 IV 抗生素、血液動力學穩定、家屬同意在宅', labs: '11/24 WBC 14.2、CRP 9.8、Cr 1.3；尿培養送檢', status: 'new', addr: '北屯區' },
-  { id: 'C-204', name: '高○○', age: 69, sex: '男', pathway: 'HF', dx: '心衰竭急性後期（HFrEF, EF 35%）', dept: '心臟內科', ward: '8A-03', route: 'early', hospDay: 5, barthel: 70, comorb: ['冠心病', '第 2 型糖尿病'], vitals: { sbp: 126, dbp: 78, hr: 82, rr: 18, spo2: 96, temp: 36.6, o2: 0, weight: 71.2 }, reason: '心臟科轉介：HF 延伸路徑（深耕計畫）；利尿劑已轉口服、體重穩定 48 小時', labs: '11/23 BNP 520、Cr 1.4', status: 'new', addr: '南屯區' },
+  { id: 'C-201', name: '楊○○', age: 72, sex: '男', pathway: 'PNA', dx: '社區型肺炎（左下葉）', dept: '胸腔內科', ward: '12A-08', route: 'early', hospDay: 3, barthel: 65, comorb: ['高血壓'], vitals: { sbp: 132, dbp: 78, hr: 88, rr: 20, spo2: 94, temp: 37.2, o2: 0 }, reason: 'HIS 標記：感染症住院第 3 天、退燒 48 小時、口服可耐受、需 IV 抗生素續療 → 提早出院候選', labs: '' + DSTR(1) + ' WBC 10.8、CRP 5.2（下降）', status: 'new', addr: '北區' },
+  { id: 'C-202', name: '周○○', age: 58, sex: '女', pathway: 'SSTI', dx: '右下肢蜂窩組織炎', dept: '感染科', ward: '9B-21', route: 'early', hospDay: 2, barthel: 90, comorb: ['第 2 型糖尿病'], vitals: { sbp: 128, dbp: 80, hr: 84, rr: 16, spo2: 98, temp: 37.0, o2: 0 }, reason: 'HIS 標記：SSTI 住院第 2 天、CRP 下降、需 IV 抗生素 5 天、自理能力佳', labs: '' + DSTR(1) + ' WBC 11.9、CRP 6.1', status: 'new', addr: '西屯區' },
+  { id: 'C-203', name: '邱○○', age: 80, sex: '女', pathway: 'UTI', dx: '急性腎盂腎炎', dept: '急診醫學部', ward: 'ED-14', route: 'ed', hospDay: 0, barthel: 40, comorb: ['第 2 型糖尿病', '慢性腎病 3a'], vitals: { sbp: 138, dbp: 82, hr: 90, rr: 18, spo2: 96, temp: 38.0, o2: 0 }, reason: '急診：巴氏量表 40 符合條款二；需 IV 抗生素、血液動力學穩定、家屬同意在宅', labs: '' + DSTR(0) + ' WBC 14.2、CRP 9.8、Cr 1.3；尿培養送檢', status: 'new', addr: '北屯區' },
+  { id: 'C-204', name: '高○○', age: 69, sex: '男', pathway: 'HF', dx: '心衰竭急性後期（HFrEF, EF 35%）', dept: '心臟內科', ward: '8A-03', route: 'early', hospDay: 5, barthel: 70, comorb: ['冠心病', '第 2 型糖尿病'], vitals: { sbp: 126, dbp: 78, hr: 82, rr: 18, spo2: 96, temp: 36.6, o2: 0, weight: 71.2 }, reason: '心臟科轉介：HF 延伸路徑（深耕計畫）；利尿劑已轉口服、體重穩定 48 小時', labs: '' + DSTR(1) + ' BNP 520、Cr 1.4', status: 'new', addr: '南屯區' },
 ];
 const DISPATCH_SEED = [
   { id: 'J-10', nurse: 'rn3', pid: 'AK-033', time: '08:30', area: '烏日區', tasks: ['IV 抗生素', '導尿管照護'], status: 3, log: [{ t: hrs(2.2), what: '出發' }, { t: hrs(1.9), what: '到達' }, { t: hrs(1.3), what: '完成' }] },
@@ -2892,6 +2911,7 @@ const DISPATCH_SEED = [
   { id: 'J-04', nurse: 'rn3', pid: 'AK-027', time: '13:30', area: '西屯區', tasks: ['抽血 BNP/Cr/K', '利尿劑衛教', '體重量測條件確認'], status: 0, log: [] },
   { id: 'J-02', nurse: 'rn2', pid: 'AK-012', time: '15:00', area: '北區', tasks: ['IV 抗生素', 'SpO₂ 同條件複測', '氧療流量確認'], status: 0, log: [] },
   { id: 'J-03', nurse: 'rn2', pid: 'AK-031', time: '15:30', area: '合作護理之家', tasks: ['IV 抗生素', '機構護理交班', '吞嚥安全確認'], status: 0, log: [] },
+  { id: 'J-12', nurse: 'rn4', pid: 'AK-036', time: '14:30', area: '西屯區', tasks: ['症狀評估（化療副作用）', '口腔與皮膚檢視', '壓傷評估', '語音紀錄'], status: 0, log: [] },
   { id: 'J-05', nurse: 'rn3', pid: 'AK-023', time: '16:00', area: '西區', tasks: ['IV 抗生素', '氧療設備檢查'], status: 0, log: [] },
 ];
 const SUPPLIES_SEED = [
@@ -2905,7 +2925,7 @@ const CLOSED_SEED = [
 const STATUS = ['待確認', '已接手', '處理中', '待重評', '已解除'];
 const LEVEL = { red: '紅｜不穩定需處理', yellow: '黃｜須觀察', green: '綠｜穩定', dq: '資料品質｜待確認' };
 const SLA = { red: 10, yellow: 30, dq: 60 }; // 分鐘（草案，待團隊核定）
- const RULE_VERSION = 'v0.9（草案）'; /* v0.9：心衰竭路徑暫停、Phase 2 重啟（規則 R-HF 保留不啟用）；v0.8：危險症狀勾選任一 → 立即 119 畫面＋紅色事件 */
+ const RULE_VERSION = 'v0.11（草案）'; /* v0.11：R-SAF-02 護理師緊急求助只通知戰情室與護理部，不自動報警 */ /* v0.10：A1——R-PU-01 壓傷分期惡化黃、R-CHEMO-01 化療中體溫 ≥38.0 紅、化療專屬危險症狀 */ /* v0.9：心衰竭路徑暫停、Phase 2 重啟（規則 R-HF 保留不啟用）；v0.8：危險症狀勾選任一 → 立即 119 畫面＋紅色事件 */
 /* ---------- 視訊：Microsoft Teams 會議連結，一鍵開啟 ----------
    VIDEO_TEAMS_URL  把 Teams 會議的「加入會議」連結貼在這裡（建議：四個頁面一起生效）
                     也可在登入畫面「攤位設定」或戰情室「視訊設定」貼上，只存在該裝置
@@ -2951,11 +2971,19 @@ function startVideo(pid, opts) {
     '<div class="btn-row" style="margin-top:8px"><button class="btn xs" data-video-set="1">視訊會議設定</button></div>' +
     '<div class="note" style="margin-top:8px">僅供示範資料使用；正式版改接院方核可的通訊診察平台。</div>');
   return t.url;
-}const STORE_KEY = 'aikeso-proto-v7rt'; /* v7：心衰竭路徑暫停（Phase 2 重啟），示範資料改為 8 人 */
+}const STORE_KEY = 'aikeso-proto-v9s'; /* v9：真實時間（示範資料相對時間換算、存檔時間戳平移、offset） */ /* v8：A1 三模組，示範病人加在家化療 1 人（9 人） */
 
 let state;
-function freshState() { const f = freshStateDemo(); shiftDemoDates(f); f.now = new Date().toISOString(); f.tOffset = 0; return f; }
-function freshStateDemo() { const f = freshState0(); if (!HF_ENABLED) { const hf = new Set(f.patients.filter((p) => p.pathway === 'HF').map((p) => p.id)); f.patients = f.patients.filter((p) => !hf.has(p.id)); f.alerts = f.alerts.filter((a) => !hf.has(a.pid)); f.candidates = f.candidates.filter((c) => c.pathway !== 'HF'); f.dispatch = f.dispatch.filter((j) => !hf.has(j.pid)); f.closed = f.closed.filter((c) => c.pathway !== 'HF'); hf.forEach((id) => { delete f.ptTasks[id]; }); f.tasks = f.tasks.map((t) => t.k === '虛擬查房' ? { ...t, done: 3, total: 8 } : t.k === '居家訪視' ? { ...t, done: 2, total: 5 } : t); } f.patients.forEach((p, i) => { p.bed = 'V' + String(i + 1).padStart(2, '0'); }); return f; }
+function shiftClockStr(str, shift) { return String(str).replace(/\b(\d{2}):(\d{2})\b/g, (_, h, m) => { const t = ((+h) * 60 + (+m) + shift + 1440 * 3) % 1440; return pad(Math.floor(t / 60)) + ':' + pad(t % 60); }); }
+function freshState() { const f = freshState0();
+  /* 真實時間：把示範的「今日 HH:MM」整體平移到載入時刻（敘事相對關係不變） */
+  const tn = tp(NOW0); const SHIFT = tn.getHours() * 60 + tn.getMinutes() - (10 * 60 + 24);
+  f.patients.forEach((p) => { if (p.nextVisit) p.nextVisit = shiftClockStr(p.nextVisit, SHIFT); if (p.round) p.round = shiftClockStr(p.round, SHIFT); if (p.b0 && p.b0.note) p.b0.note = shiftClockStr(p.b0.note, SHIFT); });
+  f.dispatch.forEach((j) => { j.time = shiftClockStr(j.time, SHIFT); });
+  Object.keys(f.ptTasks).forEach((k) => f.ptTasks[k].forEach((t) => { t.t = shiftClockStr(t.t, SHIFT); }));
+  f.alerts.forEach((a) => { a.text = shiftClockStr(a.text, SHIFT); });
+  f.offset = 0; if (!HF_ENABLED) { const hf = new Set(f.patients.filter((p) => p.pathway === 'HF').map((p) => p.id)); f.patients = f.patients.filter((p) => !hf.has(p.id)); f.alerts = f.alerts.filter((a) => !hf.has(a.pid)); f.candidates = f.candidates.filter((c) => c.pathway !== 'HF'); f.dispatch = f.dispatch.filter((j) => !hf.has(j.pid)); f.closed = f.closed.filter((c) => c.pathway !== 'HF'); hf.forEach((id) => { delete f.ptTasks[id]; });
+  if (!CHEMO_ENABLED) { const ch = new Set(f.patients.filter((p) => p.pathway === 'CHEMO').map((p) => p.id)); f.patients = f.patients.filter((p) => !ch.has(p.id)); f.dispatch = f.dispatch.filter((j) => !ch.has(j.pid)); } f.tasks = f.tasks.map((t) => t.k === '虛擬查房' ? { ...t, done: 3, total: 8 } : t.k === '居家訪視' ? { ...t, done: 2, total: 5 } : t); } f.patients.forEach((p, i) => { p.bed = 'V' + String(i + 1).padStart(2, '0'); }); return f; }
 function freshState0() {
   return {
     now: NOW0.toISOString(), tab: ROLE,
@@ -2973,11 +3001,15 @@ function freshState0() {
     dispatch: JSON.parse(JSON.stringify(DISPATCH_SEED)),
     supplies: JSON.parse(JSON.stringify(SUPPLIES_SEED)),
     closed: JSON.parse(JSON.stringify(CLOSED_SEED)),
-    seq: 1042, pseq: 34, jseq: 11,
+    seq: 1042, pseq: 34, jseq: 13,
   };
 }
+function shiftIso(o, delta) { if (typeof o === 'string') return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(o) ? new Date(Date.parse(o) + delta).toISOString() : o; if (Array.isArray(o)) return o.map((x) => shiftIso(x, delta)); if (o && typeof o === 'object') { const r = {}; Object.keys(o).forEach((k) => { r[k] = shiftIso(o[k], delta); }); return r; } return o; }
 function loadRaw() {
-  try { const s = localStorage.getItem(STORE_KEY); if (s) { const o = JSON.parse(s); if (o && o.patients && o.alerts) { const f = freshState(); Object.keys(f).forEach((k) => { if (o[k] === undefined) o[k] = f[k]; }); return o; } } } catch (e) { }
+  try { const s = localStorage.getItem(STORE_KEY); if (s) { let o = JSON.parse(s); if (o && o.patients && o.alerts) { const f = freshState(); Object.keys(f).forEach((k) => { if (o[k] === undefined) o[k] = f[k]; });
+    /* 真實時間：上次存檔到現在的間隔，整體平移所有時間戳，讓「幾分鐘前」「回應時限」延續 */
+    /* 共用後端版：存檔的時間戳不平移（紀錄保留真實時間；示範資料的相對時間只在重設時換算） */
+    o.now = new Date(Date.now() + (o.offset || 0)).toISOString(); return o; } } } catch (e) { }
   return freshState();
 }
 function saveLocal() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { } }
@@ -2989,9 +3021,9 @@ function load() { const o = loadRaw(); ensureBeds(o.patients || []); return o; }
 function nextBed() { const used = new Set(state.patients.map((p) => p.bed)); for (let i = 1; i <= 99; i++) { const b = 'V' + String(i).padStart(2, '0'); if (!used.has(b)) return b; } return 'V99'; }
 function resetAll() { try { localStorage.removeItem(STORE_KEY); } catch (e) { } state = freshState(); if (typeof ROLE === 'string' && ROLE) state.tab = ROLE; if (window.__applyIdentity) window.__applyIdentity(); if (window.__syncResetMark) window.__syncResetMark(); save(); render(); toast('已重設為初始示範資料' + (window.__syncState === 'ok' ? '（同步中的裝置一起重設）' : '')); }
 
-/* 「現在」= 真實時間 + 示範偏移（+30 分按鈕累加的 tOffset，跨裝置同步）；state.now 隨之更新供記錄時間戳使用 */
-const nowReal = () => new Date(); /* 一律真實時間；所有紀錄的時間戳都是輸入當下 */
-const now = () => { const d = nowReal(); if (state) state.now = d.toISOString(); return d; };
+/* 「現在」= 真實時間 + 示範位移（+30 分按鈕的 state.offset，跨裝置同步）；每次呼叫都更新 state.now，紀錄時間戳即輸入當下 */
+const nowReal = () => new Date(); /* 一律真實時間 */
+const now = () => { const d = new Date(Date.now() + ((typeof state !== 'undefined' && state && state.offset) || 0)); if (typeof state !== 'undefined' && state) state.now = d.toISOString(); return d; };
 const tpYmd = (d) => new Date(new Date(d).getTime() + 8 * 3600000).toISOString().slice(0, 10); /* 台北日期 YYYY-MM-DD */
 const P = (id) => state.patients.find((p) => p.id === id);
 const A = (id) => state.alerts.find((a) => a.id === id);
@@ -3040,6 +3072,7 @@ function evaluate(p) {
   if (m.conscious && m.conscious !== '清醒') red('意識改變：' + m.conscious);
   if ((m.o2 || 0) > (t.o2Max || 0)) red('氧療需求 ' + m.o2 + ' L/min 超出個別應變計畫（≤' + (t.o2Max || 0) + ' L/min）');
   (m.danger || []).forEach((d) => red('新危險症狀：' + d));
+  if (p.pathway === 'CHEMO' && m.temp != null && m.temp >= (c.feverRed || 38.0)) red('體溫 ' + m.temp.toFixed(1) + ' ≥' + (c.feverRed || 38.0).toFixed(1) + '（化療中，疑似發熱性嗜中性球低下；R-CHEMO-01）');
   if (b.sbp - m.sbp >= 30) red('收縮壓較 B0 下降 ' + (b.sbp - m.sbp) + '（快速惡化）');
   if (p.pathway === 'HF' && m.weight != null && b.weight != null && m.weight - b.weight >= (c.dWtRed || 2)) red('體重較 B0 增加 ' + (m.weight - b.weight).toFixed(1) + ' kg（≥' + (c.dWtRed || 2) + '）');
   // 個別目標與相對 B0 的變化（再看）
@@ -3053,8 +3086,9 @@ function evaluate(p) {
   if (m.hr - b.hr >= t.dHr) yel('心跳較 B0 上升 ' + (m.hr - b.hr));
   if (b.spo2 - m.spo2 >= t.dSpo2) yel('SpO₂ 較 B0 下降 ' + (b.spo2 - m.spo2));
   if (p.pathway === 'HF' && m.weight != null && b.weight != null && m.weight - b.weight >= (t.dWt || 1.5) && m.weight - b.weight < (c.dWtRed || 2)) yel('體重較 B0 增加 ' + (m.weight - b.weight).toFixed(1) + ' kg（≥' + (t.dWt || 1.5) + '）');
-  const worsening = (m.symptoms || []).filter((s) => !/改善|減輕|縮小/.test(s) && /加重|加劇|擴大|減少|變少|增加|水腫|墊高|下降|更腫|更痛|受不了|水疱|黑紫|沒有尿|吃不下|忘記|沒有吃|血絲|躺平/.test(s));
+  const worsening = (m.symptoms || []).filter((s) => !/改善|減輕|縮小/.test(s) && /加重|加劇|擴大|減少|變少|增加|水腫|墊高|下降|更腫|更痛|受不了|水疱|黑紫|沒有尿|吃不下|忘記|沒有吃|血絲|躺平|出血|瘀青|口腔破|超過 4 次/.test(s));
   if (worsening.length) yel('症狀變化：' + worsening.join('、'));
+  if (m.puWorse) yel('壓力性損傷分期較前次惡化：' + m.puWorse + '（R-PU-01，護理師確認後判定）');
   // 連續下降（趨勢）
   const last3 = p.ms.slice(-3);
   if (last3.length === 3 && last3[0].spo2 > last3[1].spo2 && last3[1].spo2 > last3[2].spo2) yel('SpO₂ 連續 3 次下降');
@@ -3137,7 +3171,7 @@ function canResolve(a) {
   return { ok: true };
 }
 function decide(pid, kind, text, who) { (state.decisions[pid] = state.decisions[pid] || []).push({ t: state.now, who, kind, text }); save(); }
-function stepTime(min) { toast('已改為真實時間，無法快轉'); now(); // 新的資料品質事件
+function stepTime(min) { state.offset = (state.offset || 0) + min * MIN; state.now = new Date(Date.now() + state.offset).toISOString(); // 新的資料品質事件
   state.patients.forEach((p) => { const ev = evaluate(p); if (ev.dq && !state.alerts.some((a) => a.pid === p.id && a.level === 'dq' && a.status < 4)) createAlert(p.id, 'dq', ev.dqReasons.join('；'), ev); });
   save(); render(); }
 
@@ -3150,7 +3184,7 @@ function enrollCandidate(cid, f, who) {
   const targets = JSON.parse(JSON.stringify(tpl.targets)); targets.o2Max = f.o2Max || 0;
   const p = {
     id, bed: nextBed(), name: c.name, age: c.age, sex: c.sex, pathway: c.pathway, dx: c.dx, route: c.route, dept: c.dept,
-    admit: '2026-11-' + (24 - c.hospDay), discharge: '2026-11-24', day: 1, plan: tpl.plan, tech: f.tech, barthel: f.barthel,
+    admit: DSTR(c.hospDay), discharge: DSTR(0), day: 1, plan: tpl.plan, tech: f.tech, barthel: f.barthel,
     md: f.md, backup: f.md === 'md1' ? 'md2' : 'md1', rn: f.rn, addr: c.addr, comorb: c.comorb.slice(),
     b0, targets, critical: JSON.parse(JSON.stringify(tpl.critical)), tx: f.tx, labs: c.labs,
     freq: tpl.freq, nextVisit: '今日 ' + f.firstVisit + ' 護理到府（首訪：Tech Pack 架設與教學）', round: '明日 09:30 視訊查房',
@@ -3179,7 +3213,7 @@ function closePatient(pid, note, who) {
 }
 function daysSinceClose(p) { return Math.floor((now() - new Date(p.closedAt)) / 86400000); }
 function nextFollowup(p) { return (p.followups || []).find((f) => !f.done); }
-function jobTime(j) { return new Date(tpYmd(now()) + 'T' + j.time + ':00+08:00'); }
+function jobTime(j) { const n = tp(now()); const [h, m] = j.time.split(':').map(Number); return new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate(), h - 8, m)); }
 function jobLate(j) { return j.status < 2 && (now() - jobTime(j)) / MIN > 15; }
 function jobStep(j, who) {
   const names = ['出發', '到達', '完成'];
@@ -3310,6 +3344,7 @@ function caseCard(p, ctx) {
   h += '<div class="sec"><h4>最新量測 vs B0 出院基準</h4>' + vitalsGrid(p) + '</div>';
   h += '<div class="sec"><h4>判讀依據（規則引擎 ' + RULE_VERSION + '）</h4>' + reasonsList(L) + '</div>';
   h += '<div class="sec"><h4>近期趨勢</h4>' + sparks(p) + '</div>';
+  if (p.pu) h += '<div class="sec"><h4>壓力性損傷（A1 分期）</h4><div class="note">護理師確認：<b>' + esc(p.pu.stage) + '</b>（' + fmtT(p.pu.t) + '，' + esc(p.pu.by) + '）' + (p.pu.aiDraft ? '；AI 草稿 ' + esc(p.pu.aiDraft.stage) + '（信心 ' + Math.round(p.pu.aiDraft.conf * 100) + '%，' + esc(p.pu.aiDraft.size) + '）' : '') + (p.puHist && p.puHist.length > 1 ? '；歷次：' + p.puHist.map((x) => esc(x.stage)).join(' → ') : '') + '</div></div>';
   if ((m.symptoms || []).length || (m.danger || []).length) h += '<div class="sec"><h4>症狀回報</h4><div class="chip-row">' + (m.danger || []).map((s) => '<span class="pill red">' + esc(s) + '</span>').join('') + (m.symptoms || []).map((s) => '<span class="tag">' + esc(s) + '</span>').join('') + (m.photo ? '<span class="tag acc">傷口照片已上傳</span>' : '') + '</div></div>';
   h += '<div class="sec"><h4>警示與工作狀態</h4>' + (open.length ? open.map((a) => '<div class="al stripe ' + a.level + '" style="margin-bottom:8px"><div>' + stBadge(a) + '</div><div><div class="who">' + esc(a.text) + '</div><div class="meta"><span>' + a.id + '</span><span>' + fmtT(a.at) + '</span><span>' + esc(a.rule) + '</span><span>負責 ' + staff(a.owner) + '</span></div>' + statusFlow(a) + '</div><div></div><div class="acts">' + alertActions(a, who) + '</div></div>' + '<details class="acc"><summary>處置紀錄（' + a.log.length + '）</summary><div class="acc-b">' + alertLogHtml(a) + '</div></details>').join('') : '<div class="note">目前沒有未解除的警示。</div>') + '</div>';
   h += '<div class="sec"><h4>個別目標與界線</h4>' + targetsList(p) + '</div>';
@@ -3388,6 +3423,17 @@ function ddx(p) {
       { dx: '深層靜脈栓塞', ev: [U('單側腫脹、壓痛與紅腫分布是否一致'), U('下肢超音波')] },
     ];
     next = ['到府：重新標記範圍、拍照比對、評估波動感與疼痛', '追問：疼痛是否與外觀不成比例、麻木、水疱', '安排：CBC/CRP，必要時傷口培養、床邊超音波', '快速擴大或劇痛 → 立即返院評估'];
+  } else if (p.pathway === 'CHEMO') {
+    likely = [
+      { dx: '發熱性嗜中性球低下', ev: [fever ? Y('體溫 ' + m.temp.toFixed(1)) : N('未發燒'), U('ANC（返院抽血）'), has(/發抖|畏寒/) ? Y('畏寒發抖') : U('畏寒未回報')] },
+      { dx: '化療相關黏膜炎／腹瀉致脫水', ev: [has(/吃不下|喝不下|口腔破/) ? Y('攝食不足或口腔破') : N('攝食可'), has(/超過 4 次/) ? Y('腹瀉或嘔吐 >4 次') : N('未達次數'), tachy ? Y('心跳增快') : N('心跳穩定')] },
+      { dx: '血小板低下出血', ev: [has(/出血|瘀青|黑便/) ? Y('出血或瘀青') : N('無出血'), U('Plt')] },
+    ];
+    mustNot = [
+      { dx: '敗血症（嗜中性球低下）', ev: [fever ? Y('發燒') : N('未發燒'), si ? Y('SI ≥0.9') : N('SI 正常'), hypo ? Y('收縮壓較 B0 降 ≥20') : N('血壓穩定')] },
+      { dx: '手足症候群惡化／皮膚感染', ev: [U('手掌腳掌紅腫脫皮'), U('到府皮膚檢視')] },
+    ];
+    next = ['發燒 ≥38.0：不等待，返院抽血 CBC/ANC、血液培養，啟動綠色通道', '追問：口腔、進食量、排便次數、出血', '複測：體溫、坐姿血壓與心跳', '聯繫腫瘤科主責醫師確認是否暫停口服化療'];
   } else {
     likely = [
       { dx: '心衰竭失代償（體液蓄積）', ev: [m.weight - b.weight >= 1.5 ? Y('體重 +' + (m.weight - b.weight).toFixed(1) + ' kg') : N('體重穩定'), has(/水腫|墊高/) ? Y('水腫、端坐呼吸') : N('無水腫回報'), m.sbp > 150 ? Y('血壓上升') : N('血壓在目標內'), U('BNP')] },
@@ -3411,8 +3457,8 @@ function ddx(p) {
 /* ---------- 六段式出院衛教（模板式草稿） ---------- */
 function eduDraft(p) {
   const pw = PATHWAYS[p.pathway], m = latest(p), t = p.targets;
-  const d119 = { PNA: '呼吸變喘、講話會斷、嘴唇發紫、血氧低於 ' + t.spo2Min + '%、意識變得不清楚', UTI: '意識變得不清楚、呼吸變喘或講話會斷、嘴唇發紫、完全沒有尿', SSTI: '疼痛突然變得非常劇烈、皮膚出現水疱或變黑紫色、呼吸變喘、意識變得不清楚', HF: '休息時也喘或躺平無法呼吸、嘴唇發紫、胸痛或胸悶、意識變得不清楚' }[p.pathway];
-  const team = { PNA: '發燒超過 38.5 度、痰變多或變黃綠、比平常更累', UTI: '發燒超過 38.5 度、吃不下或喝不下、尿量明顯變少、腰痛加劇', SSTI: '紅腫超過筆記線、疼痛加劇、發燒超過 38.5 度', HF: '一天內體重增加 1 公斤以上、腳腫加重、走動比平常更喘' }[p.pathway];
+  const d119 = { PNA: '呼吸變喘、講話會斷、嘴唇發紫、血氧低於 ' + t.spo2Min + '%、意識變得不清楚', UTI: '意識變得不清楚、呼吸變喘或講話會斷、嘴唇發紫、完全沒有尿', SSTI: '疼痛突然變得非常劇烈、皮膚出現水疱或變黑紫色、呼吸變喘、意識變得不清楚', HF: '休息時也喘或躺平無法呼吸、嘴唇發紫、胸痛或胸悶、意識變得不清楚', CHEMO: '發冷發抖或發燒超過 38.5 度、出血不止或黑便、吐或拉到無法喝水或站不穩、意識變得不清楚' }[p.pathway];
+  const team = { PNA: '發燒超過 38.5 度、痰變多或變黃綠、比平常更累', UTI: '發燒超過 38.5 度、吃不下或喝不下、尿量明顯變少、腰痛加劇', SSTI: '紅腫超過筆記線、疼痛加劇、發燒超過 38.5 度', HF: '一天內體重增加 1 公斤以上、腳腫加重、走動比平常更喘', CHEMO: '體溫 38 度以上、口腔破或吃不下、一天吐或拉超過 4 次、瘀青或出血' }[p.pathway];
   return [
     { h: '目前病況與照護計畫', b: '您因為' + p.dx + '住院，經醫師評估病情穩定，可以在家裡繼續接受住院等級的治療（在宅急症照護）。目前是在家治療的第 ' + p.day + ' 天，預計療程約 ' + p.plan + ' 天。治療期間由主責醫師 ' + staff(p.md) + ' 與訪視護理師 ' + staff(p.rn) + ' 負責，戰情室 24 小時有人看顧您的量測資料。' },
     { h: '確認診斷與待釐清問題', b: '診斷：' + p.dx + '。目前需要持續追蹤的問題：' + pw.watch + '。' + (dataGaps(p).length ? '尚待確認的資料：' + dataGaps(p).join('、') + '，醫師會在查房時跟您說明。' : '') },
@@ -3657,7 +3703,11 @@ const PT_Q = {
   UTI: [['發燒感', ['沒有', '微熱', '發燒、發冷或發抖']], ['小便', ['跟平常一樣', '刺痛或頻尿', '尿量明顯變少', '完全沒有尿']], ['吃喝', ['正常', '吃得少', '幾乎吃不下或喝不下']], ['腰痛', ['沒有', '有一點', '很痛']]],
   SSTI: [['紅腫範圍', ['縮小或一樣', '比筆記線大一點', '明顯超過筆記線']], ['疼痛', ['減輕', '差不多', '變得更痛', '痛到受不了']], ['發燒感', ['沒有', '微熱', '發燒、發冷或發抖']], ['皮膚', ['沒有變化', '出現水疱', '顏色變黑紫或麻木']]],
   HF: [['呼吸', ['跟平常一樣', '走動會喘', '躺平會喘、要墊高枕頭', '休息時也喘']], ['腳腫', ['沒有或減輕', '差不多', '比昨天更腫']], ['體重', ['跟昨天差不多', '比昨天重 0.5–1 公斤', '比昨天重 1 公斤以上']], ['利尿劑', ['有按時吃', '忘記一次', '沒有吃']]],
+  CHEMO: [['發燒感', ['沒有', '微熱', '發燒、發冷或發抖']], ['口腔與吃喝', ['正常', '口腔破或痛、吃得少', '幾乎吃不下或喝不下']], ['噁心嘔吐腹瀉', ['沒有', '有但可忍受', '一天吐或拉超過 4 次']], ['活動與出血', ['跟平常一樣', '比平常累', '有出血或瘀青']]],
 };
+/* 路徑專屬危險症狀（接在共同五項之後，勾選任一項同樣立即 119＋紅色事件） */
+const PT_DANGER_EXTRA = { CHEMO: ['發冷發抖或發燒超過 38.5 度', '出血不止、黑便或吐血', '吐或拉到無法喝水、頭暈站不穩'] };
+function dangerList(p) { return PT_DANGER.concat((p && PT_DANGER_EXTRA[p.pathway]) || []); }
 const PT_DANGER = ['意識不清或叫不太醒', '嘴唇發紫', '胸痛或胸悶', '喘到無法講完一句話', '嚴重頭暈快昏倒'];
 
 function renderPt() {
@@ -3685,7 +3735,7 @@ function renderPt() {
   } else if (s.screen === 'report') {
     const qs = PT_Q[p.pathway];
     body = '<div class="pcard"><h3>今天的感覺 <span class="r">' + PATHWAYS[p.pathway].short + '</span></h3><form id="pt-report">' + qs.map((q, qi) => '<div class="field" style="margin-bottom:10px"><span>' + esc(q[0]) + '</span><div class="opt">' + q[1].map((o, oi) => '<label><input type="radio" name="q' + qi + '" value="' + oi + '"' + (oi === 0 ? ' checked' : '') + '>' + esc(o) + '</label>').join('') + '</div></div>').join('') +
-      '<div class="field" style="margin-bottom:10px"><span style="color:var(--red);font-weight:600">有沒有這些情況？勾選任一項，請立刻直接撥打 119（會同時通知戰情室，不必按送出）</span><div class="opt danger">' + PT_DANGER.map((d, i) => '<label><input type="checkbox" name="d" value="' + i + '">' + esc(d) + '</label>').join('') + '</div></div>' +
+      '<div class="field" style="margin-bottom:10px"><span style="color:var(--red);font-weight:600">有沒有這些情況？勾選任一項，請立刻直接撥打 119（會同時通知戰情室，不必按送出）</span><div class="opt danger">' + dangerList(p).map((d, i) => '<label><input type="checkbox" name="d" value="' + i + '">' + esc(d) + '</label>').join('') + '</div></div>' +
       (p.pathway === 'SSTI' ? '<div class="field" style="margin-bottom:10px"><span>傷口照片（對準筆記線）</span><button class="btn" type="button" data-act="pt-photo">' + ICONS.cam + '　拍照上傳</button><span id="pt-photo-ok" class="faint" style="font-size:16.5px">' + (m.photo ? '今日已上傳' : '今日尚未上傳') + '</span></div>' : '') +
       '<div class="btn-row"><button class="btn primary" type="submit">送出回報</button></div></form></div>';
   } else if (s.screen === 'edu') {
@@ -3700,7 +3750,7 @@ function renderPt() {
       '<div class="pcard"><h3>什麼時候要求助</h3><div style="font-size:18.5px;line-height:1.7">' + esc((state.edu[p.id] ? state.edu[p.id].secs[3].b : eduDraft(p)[3].b)) + '</div></div>' +
       '<div class="pcard"><h3>無法連線時</h3><div class="note">1. 用手機撥打備援電話（護理師 ' + staff(p.rn) + '）。<br>2. 若情況危急請直接撥 119，並告知「正在接受中國附醫在宅急症照護」。<br>3. 系統斷線超過設定時間，戰情室也會主動打給您。</div></div>';
   }
-  const side = '<div class="side card" style="padding:16px"><h3>病人端 App・設計對照</h3><p>以中國醫點通擴充模組作為正式臨床入口，不另開新 App。依 Tech Pack 等級（L0 純手機 → L2 平板標準包）提供一致流程。</p><ul><li>今天：依個別計畫的量測、用藥、訪視提醒；回傳後只顯示「已收到」與後續安排。</li><li>量測：藍牙自動回傳；同次量測 BP／HR、記錄氧療與姿勢，才能和 B0 比對。</li><li>回報：疾病別簡短問題＋危險症狀勾選；勾選任一項立即全螢幕顯示「撥打 119」並直達紅色事件，不必按送出。</li><li>衛教：六段式指引，醫師確認後以照護團隊名義發布；以回述確認理解。</li><li>求助：一鍵視訊、專線、SOS；無法連線時的備援流程。</li></ul><p class="ref">規劃書大綱 §4.1–4.4・附錄 F：病人端是否顯示燈號（本原型：不顯示）</p><div class="hr"></div><p><b>試試看：</b>在「量測」按「填入惡化示範值」後送出，切到戰情室看新警示如何出現、被接手與解除。</p></div>';
+  const side = '<div class="side card" style="padding:16px"><h3>病人端 App・設計對照</h3><p>以中國醫點通擴充模組作為正式臨床入口，不另開新 App。依 Tech Pack 等級（L0 純手機 → L2 平板標準包）提供一致流程。</p><ul><li>今天：依個別計畫的量測、用藥、訪視提醒；回傳後只顯示「已收到」與後續安排。</li><li>量測：藍牙自動回傳；同次量測 BP／HR、記錄氧療與姿勢，才能和 B0 比對。</li><li>回報：疾病別簡短問題＋危險症狀勾選；勾選任一項立即全螢幕顯示「撥打 119」並直達紅色事件，不必按送出。在家化療路徑另有三項化療專屬危險症狀（A1）。</li><li>衛教：六段式指引，醫師確認後以照護團隊名義發布；以回述確認理解。</li><li>求助：一鍵視訊、專線、SOS；無法連線時的備援流程。</li></ul><p class="ref">規劃書大綱 §4.1–4.4・附錄 F：病人端是否顯示燈號（本原型：不顯示）</p><div class="hr"></div><p><b>試試看：</b>在「量測」按「填入惡化示範值」後送出，切到戰情室看新警示如何出現、被接手與解除。</p></div>';
   return '<div class="stage">' + phone(top, body, tabs) + side + '</div>';
 }
 
@@ -3729,8 +3779,8 @@ function submitMeasure(form) {
 function submitReport(form) {
   const p = P(state.pt.pid); const qs = PT_Q[p.pathway];
   const others = qs.map((q, qi) => { const v = parseInt(form.elements['q' + qi].value); return v > 0 ? q[1][v] : null; }).filter(Boolean);
-  const danger = [...form.querySelectorAll('input[name=d]:checked')].map((c) => PT_DANGER[parseInt(c.value)]);
-  const worsen = others.filter((s) => /喘|多|變黃綠|血絲|發燒|累|躺|變少|沒有尿|吃不下|很痛|大一點|超過|更痛|受不了|水疱|黑紫|更腫|重|沒有吃|忘記/.test(s)).map((s) => s.replace(/^比筆記線大一點$/, '紅腫範圍較標記線擴大'));
+  const danger = [...form.querySelectorAll('input[name=d]:checked')].map((c) => dangerList(p)[parseInt(c.value)]);
+  const worsen = others.filter((s) => /喘|多|變黃綠|血絲|發燒|累|躺|變少|沒有尿|吃不下|很痛|大一點|超過|更痛|受不了|水疱|黑紫|更腫|重|沒有吃|忘記|出血|瘀青|口腔破/.test(s)).map((s) => s.replace(/^比筆記線大一點$/, '紅腫範圍較標記線擴大'));
   symptomAlert(p.id, danger, worsen);
   state.pt.screen = 'today'; render();
   if (danger.length) { toast('請立刻直接撥打 119；戰情室已收到通知，護理師會回撥協助', 8000); show119(danger.join('、')); } else toast('已收到您的回報，謝謝');
@@ -3768,6 +3818,7 @@ function renderRn() {
       } else {
         body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・' + j.time + '</span></h3><form id="rn-form" data-j="' + j.id + '">' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin-bottom:8px"><input type="checkbox" name="idc" required> 身分確認（雙重辨識）</label>' +
+          (A1_ENABLED ? '<div class="aibox"><div class="aibox-h">語音護理紀錄 <span class="faint">A1・AI 草稿，護理師核對後才送出</span></div><textarea name="voice" rows="2" placeholder="按「語音輸入」口述，或按「示範語句」"></textarea><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-voice">🎤 語音輸入</button><button class="btn sm" type="button" data-act="rn-voice-demo">示範語句</button><button class="btn sm primary" type="button" data-act="rn-voice-parse">產生結構化草稿</button></div><div class="faint" id="rn-voice-msg" style="font-size:15px;margin-top:4px"></div></div>' : '') +
           '<div class="field" style="margin-bottom:6px"><span><b>生命徵象</b>（同 B0 量測條件：' + esc(p.b0.note.split('，').slice(1).join('，') || '坐姿') + '）</span></div><div class="fgrid">' +
           '<div class="field"><span>收縮壓</span><input type="number" name="sbp" value="' + m.sbp + '" required></div><div class="field"><span>舒張壓</span><input type="number" name="dbp" value="' + m.dbp + '" required></div>' +
           '<div class="field"><span>心跳</span><input type="number" name="hr" value="' + m.hr + '" required></div><div class="field"><span>SpO₂ %</span><input type="number" name="spo2" value="' + m.spo2 + '" required></div>' +
@@ -3775,6 +3826,7 @@ function renderRn() {
           '<div class="field"><span>氧療 L/min</span><input type="number" name="o2" step="0.5" value="' + (m.o2 || 0) + '"></div>' + (p.pathway === 'HF' ? '<div class="field"><span>體重 kg</span><input type="number" name="weight" step="0.1" value="' + (m.weight || '') + '"></div>' : '<div class="field"><span>意識</span><select name="conscious"><option>清醒</option><option>嗜睡</option><option>叫不太醒</option></select></div>') +
           '</div><div class="field" style="margin:10px 0 4px"><span><b>治療與任務執行</b></span></div><div class="opt">' + j.tasks.map((t, i) => '<label><input type="checkbox" name="task" value="' + i + '" checked>' + esc(t) + '</label>').join('') + '</div>' +
           (p.pathway === 'SSTI' ? '<div class="field" style="margin-top:10px"><span>傷口紅腫範圍（cm，對照標記線）</span><input name="wound" placeholder="例：12×9 → 12×9，未超出標記線；無波動感"></div><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-photo" data-p="' + p.id + '">' + ICONS.cam + ' 拍照上傳（對準標記線）</button></div>' : '') +
+          (A1_ENABLED ? '<div class="aibox" style="margin-top:10px"><div class="aibox-h">壓力性損傷評估 <span class="faint">A1・拍照後 AI 分期草稿，護理師確認才成紀錄</span></div><div class="fgrid"><div class="field"><span>前次確認</span><input value="' + esc(p.pu ? p.pu.stage + '（' + fmtT(p.pu.t) + '）' : '無紀錄') + '" disabled></div><div class="field"><span>本次分期（護理師確認）</span><select name="pu"><option value="">未評估</option>' + ['無壓傷', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', '深層組織損傷（DTI）', '無法分期'].map((x) => '<option' + (p.pu && p.pu.stage === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></div></div><input type="hidden" name="puDraft"><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-pu-ai" data-p="' + p.id + '">' + ICONS.cam + ' 拍照→AI 分期草稿（示範）</button></div><div class="faint" id="rn-pu-msg" style="font-size:15px;margin-top:4px"></div></div>' : '') +
           '<div class="field" style="margin-top:10px"><span>觀察與備註</span><textarea name="note" rows="2" placeholder="例：攝食約半碗，尿量 300 ml；家屬能正確操作血氧機"></textarea></div>' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin:8px 0"><input type="checkbox" name="teach"> 衛教回述確認（病人／照顧者用自己的話說一次）</label>' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin:8px 0"><input type="checkbox" name="signed"> 病人／照顧者電子簽名</label>' +
@@ -3787,7 +3839,8 @@ function renderRn() {
       '<div class="pcard"><h3>Tech Pack 攜帶</h3><div class="task"><span class="chk" style="background:var(--green);border-color:var(--green)">✓</span><div class="tx">L2 標準包 ×1（' + (state.dispatch.find((j) => j.nurse === s.nurse && j.first) ? '今日首訪架設' : '備用') + '）</div></div><div class="task"><span class="chk"></span><div class="tx">Wi-Fi 延伸器、備用電源</div></div><div class="task"><span class="chk"></span><div class="tx">防穿刺針具收集盒、醫療廢棄物袋（依環安室規範）</div></div></div>';
   } else if (s.screen === 'safety') {
     const allLogs = jobs.flatMap((j) => j.log.map((l) => ({ t: l.t, what: l.what, who: P(j.pid) ? P(j.pid).name : j.pid }))).sort((a, b) => new Date(a.t) - new Date(b.t));
-    body = '<div class="btn-row" style="gap:8px"><button class="big call" style="flex:1" data-act="rn-safe">' + ICONS.home + '安全回報<span class="faint" style="font-weight:400;font-size:16.5px">離開案家時回報</span></button><button class="big sos" style="flex:1" data-act="rn-sos">' + ICONS.sos + '緊急求助<span style="font-weight:400;font-size:16.5px;opacity:.9">通知戰情室與警方</span></button></div>' +
+    body = '<div class="btn-row" style="gap:8px"><button class="big call" style="flex:1" data-act="rn-safe">' + ICONS.home + '安全回報<span class="faint" style="font-weight:400;font-size:16.5px">離開案家時回報</span></button><button class="big sos" style="flex:1" data-act="rn-sos">' + ICONS.sos + '緊急求助<span style="font-weight:400;font-size:16.5px;opacity:.9">通知戰情室與護理部緊急聯絡</span></button></div>' +
+      '<div class="note" style="margin:6px 0 10px">緊急求助只通知戰情室與護理部緊急聯絡人（含位置），不自動通報警方；需要報警由戰情室依護理部 SOP 判斷後撥打 110。</div>' +
       '<div class="pcard"><h3>行程定位 <span class="r">示範</span></h3><div class="note">目前位置：' + (jobs.find((j) => j.status === 1 || j.status === 2) ? esc(jobs.find((j) => j.status === 1 || j.status === 2).area) + '（前往／停留中）' : '指揮中心') + '；下一案 ' + (jobs.find((j) => j.status === 0) ? jobs.find((j) => j.status === 0).time + ' ' + esc(jobs.find((j) => j.status === 0).area) : '無') + '。逾時未到達或停留超過預期時，系統自動通知戰情室。</div></div>' +
       '<div class="pcard"><h3>今日三點打卡紀錄</h3>' + (allLogs.length ? '<div class="log">' + allLogs.map((l) => '<div class="e"><time>' + fmtT(l.t) + '</time><div><b>' + esc(l.who) + '</b>　' + esc(l.what) + '</div></div>').join('') + '</div>' : '<div class="empty">尚無打卡</div>') + '</div>';
   }
@@ -3798,12 +3851,22 @@ function handleRnAction(btn) {
   const act = btn.dataset.act;
   if (act === 'job-step') { const j = state.dispatch.find((x) => x.id === btn.dataset.j); jobStep(j, state.rn.nurse); toast(P(j.pid).name + '：' + JOB_ST[j.status] + '打卡 ' + fmtT(state.now)); if (j.status === 2) { state.rn.job = j.id; state.rn.screen = 'job'; } render(); }
   if (act === 'job-open') { state.rn.job = btn.dataset.j; state.rn.screen = 'job'; render(); }
+  if (act === 'rn-voice') { voiceStart(); }
+  if (act === 'rn-voice-demo') { const f = document.getElementById('rn-form'); const j = state.dispatch.find((x) => x.id === f.dataset.j); const p = P(j.pid); f.elements.voice.value = voiceDemoText(p); document.getElementById('rn-voice-msg').textContent = '已填入示範語句，按「產生結構化草稿」'; }
+  if (act === 'rn-voice-parse') { voiceParse(document.getElementById('rn-form')); }
+  if (act === 'rn-pu-ai') { const f = document.getElementById('rn-form'); const p = P(btn.dataset.p); const d = puDraft(p); f.elements.puDraft.value = JSON.stringify(d); f.elements.pu.value = d.stage; f.elements.pu.classList.add('ai-fill'); document.getElementById('rn-pu-msg').innerHTML = 'AI 草稿：<b>' + esc(d.stage) + '</b>（信心 ' + Math.round(d.conf * 100) + '%，' + esc(d.size) + '，' + esc(d.site) + '）' + (p.pu ? '；前次 ' + esc(p.pu.stage) : '') + '——請核對照片後確認或修改，送出時以護理師選擇為準'; toast('照片已上傳；AI 分期草稿已填入，請確認', 4000); }
   if (act === 'rn-video') { inviteVideo(btn.dataset.p, staff(state.rn.nurse)); return; }
   if (act === 'rn-nav') { const j = state.dispatch.find((x) => x.id === btn.dataset.j); toast('導航至 ' + j.area + '（示範：路線 agent 已排入）'); }
   if (act === 'rn-photo') { const p = P(btn.dataset.p); const m = latest(p); m.photo = true; p.photoMissing = false; save(); toast('傷口照片已上傳，與前次自動比對'); }
   if (act === 'rn-safe') { toast('安全回報已送出：離開案家 ' + fmtT(state.now)); }
-  if (act === 'rn-sos') { toast('已通知戰情室與緊急聯絡（示範）'); }
+  if (act === 'rn-sos') { const js = jobsOf(state.rn.nurse); const cur = js.find((j) => j.status === 1 || j.status === 2) || js.find((j) => j.status === 0) || js[0]; if (!cur) { toast('已通知戰情室與護理部緊急聯絡（含位置）；不會自動報警', 6000); return; } const a = createAlert(cur.pid, 'red', '護理師緊急求助（' + STAFF[state.rn.nurse].name + '，' + cur.area + '）', null); a.rule = 'R-SAF-02 護理師緊急求助'; a.log[0].who = '護理端 App'; a.log[0].what = '護理師按下緊急求助；已通知戰情室與護理部緊急聯絡（含位置）；不自動通報警方，是否報警由戰情室依護理部 SOP 判斷'; save(); toast('已通知戰情室與護理部緊急聯絡（含位置）；不會自動報警', 6000); }
 }
+/* ---------- A1：語音護理紀錄（Web Speech API；無麥克風或不支援時用示範語句）與壓傷分期草稿（示範） ---------- */
+function voiceDemoText(p) { const m = latest(p); return '血壓 ' + (m.sbp - 2) + ' ' + (m.dbp) + '，心跳 ' + (m.hr + 2) + '，血氧 ' + m.spo2 + '，體溫 ' + (m.temp + 0.1).toFixed(1) + '，呼吸 ' + m.rr + (p.pathway === 'CHEMO' ? '。口腔有一處破皮，吃得少，今天拉了兩次，沒有出血' : p.pathway === 'SSTI' ? '。紅腫沒有超出標記線，沒有波動感' : '。抗生素已經打完') + '。病人用自己的話說了一次什麼時候要打 119，家屬會操作血氧機。'; }
+function voiceStart() { const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const f = document.getElementById('rn-form'); const msg = document.getElementById('rn-voice-msg'); if (!SR) { msg.textContent = '此瀏覽器不支援語音辨識（Chrome／Edge 可用）；請按「示範語句」'; return; } try { const rec = new SR(); rec.lang = 'zh-TW'; rec.interimResults = true; rec.continuous = true; let base = f.elements.voice.value; msg.textContent = '聆聽中…再按一次停止'; rec.onresult = (e) => { let t = ''; for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript; f.elements.voice.value = (base ? base + ' ' : '') + t; }; rec.onend = () => { msg.textContent = '已停止；按「產生結構化草稿」'; voiceStart._rec = null; }; rec.onerror = (e) => { msg.textContent = '語音辨識錯誤：' + e.error + '；可改用示範語句'; }; if (voiceStart._rec) { voiceStart._rec.stop(); return; } voiceStart._rec = rec; rec.start(); } catch (e) { msg.textContent = '無法啟動麥克風：' + e.message; } }
+function cnNum(s) { const D = { '零': 0, '一': 1, '二': 2, '兩': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 }; s = String(s).trim(); if (/^[\d.]+$/.test(s)) return parseFloat(s); let n = 0, cur = 0, dec = null; for (const ch of s) { if (ch === '點') { dec = ''; continue; } if (dec !== null) { if (D[ch] !== undefined) dec += D[ch]; continue; } if (ch === '百') { n += (cur || 1) * 100; cur = 0; } else if (ch === '十') { n += (cur || 1) * 10; cur = 0; } else if (D[ch] !== undefined) cur = D[ch]; } n += cur; return parseFloat(n + (dec !== null && dec !== '' ? '.' + dec : '')); }
+function voiceParse(f) { const t = f.elements.voice.value; const msg = document.getElementById('rn-voice-msg'); if (!t.trim()) { msg.textContent = '沒有語音內容'; return; } const N = '([\\d.]+|[零一二兩三四五六七八九十百點]+)'; const grab = (re) => { const x = t.match(re); return x ? cnNum(x[1]) : null; }; const set = (k, v) => { if (v == null || isNaN(v) || !f.elements[k]) return false; f.elements[k].value = v; f.elements[k].classList.add('ai-fill'); return true; }; let n = 0; const bp = t.match(new RegExp('血壓\\s*' + N + '\\s*[／/，, ]\\s*' + N)); if (bp) { if (set('sbp', cnNum(bp[1]))) n++; if (set('dbp', cnNum(bp[2]))) n++; } if (set('hr', grab(new RegExp('心跳\\s*' + N)))) n++; if (set('spo2', grab(new RegExp('血氧\\s*' + N)))) n++; if (set('temp', grab(new RegExp('體溫\\s*' + N)))) n++; if (set('rr', grab(new RegExp('呼吸\\s*' + N)))) n++; if (set('o2', grab(new RegExp('氧氣\\s*' + N)))) n++; const notes = []; if (/抗生素.*(打完|已給|給完)/.test(t)) notes.push('IV 抗生素已給'); if (/口腔.*(破|潰瘍)/.test(t)) notes.push('口腔破皮'); if (/吃得少|吃不下/.test(t)) notes.push('攝食減少'); if (/拉了?([零一二兩三四五六七八九十\d]+)次/.test(t)) notes.push('腹瀉 ' + cnNum(t.match(/拉了?([零一二兩三四五六七八九十\d]+)次/)[1]) + ' 次'); if (/沒有出血|無出血/.test(t)) notes.push('無出血'); if (/沒有超出標記線|未超出標記線/.test(t)) { notes.push('紅腫未超出標記線'); if (f.elements.wound) { f.elements.wound.value = '未超出標記線；無波動感'; f.elements.wound.classList.add('ai-fill'); } } if (/沒有波動感|無波動感/.test(t)) notes.push('無波動感'); if (/家屬.*(會|能).*(血氧|操作)/.test(t)) notes.push('家屬能操作血氧機'); if (/用自己的話|回述/.test(t) && f.elements.teach) { f.elements.teach.checked = true; notes.push('回述確認'); } if (notes.length && f.elements.note) { f.elements.note.value = notes.join('；'); f.elements.note.classList.add('ai-fill'); } f.dataset.aiFilled = '1'; msg.innerHTML = '草稿已填入 <b>' + n + '</b> 個量測欄位' + (notes.length ? '與備註（' + notes.length + ' 項）' : '') + '，黃底為 AI 填入——請逐欄核對後送出；送出紀錄會註明「語音→草稿→護理師核對」'; }
+function puDraft(p) { const seq = ['無壓傷', 'Stage 1', 'Stage 2', 'Stage 3']; let stage; if (!p.pu) stage = p.barthel != null && p.barthel < 40 ? 'Stage 1' : '無壓傷'; else { const i = seq.indexOf(p.pu.stage); stage = (p.id.endsWith('6') || p.id.endsWith('0')) && i >= 0 && i < 3 ? seq[i + 1] : p.pu.stage; } return { stage, conf: stage === '無壓傷' ? 0.9 : 0.82, size: stage === '無壓傷' ? '未見壓傷' : '3×2 cm', site: '薦骨', t: state.now }; }
 function submitVisit(form) {
   const j = state.dispatch.find((x) => x.id === form.dataset.j); const p = P(j.pid);
   const g = (k) => form.elements[k] ? parseFloat(form.elements[k].value) : undefined;
@@ -3813,12 +3876,19 @@ function submitVisit(form) {
   const wound = form.elements.wound ? form.elements.wound.value : ''; if (wound && !/超出|擴大/.test(wound)) { /* 無擴大 */ }
   if (wound && /擴大|超出/.test(wound)) m.symptoms = ['紅腫範圍較標記線擴大'];
   if (form.elements.wound && latest(p).photo) m.photo = true;
+  const PU_RANK = { '無壓傷': 0, 'Stage 1': 1, 'Stage 2': 2, 'Stage 3': 3, 'Stage 4': 4, '深層組織損傷（DTI）': 3.5, '無法分期': 3.5 };
+  let puNote = '';
+  if (form.elements.pu && form.elements.pu.value) { const stage = form.elements.pu.value; let draft = null; try { draft = form.elements.puDraft.value ? JSON.parse(form.elements.puDraft.value) : null; } catch (e) { }
+    if (p.pu && PU_RANK[stage] > PU_RANK[p.pu.stage]) m.puWorse = p.pu.stage + ' → ' + stage;
+    p.puHist = (p.puHist || []).concat([{ stage, t: state.now }]); p.pu = { stage, t: state.now, by: STAFF[state.rn.nurse].name, aiDraft: draft };
+    puNote = '；壓傷 ' + stage + (draft ? '（AI 草稿 ' + draft.stage + '，護理師' + (draft.stage === stage ? '確認' : '修改') + '）' : '（護理師評估）'); }
+  const voiceTxt = form.elements.voice ? form.elements.voice.value.trim() : '';
   const r = addMeasurement(p.id, m, '護理到府');
-  j.record = { t: state.now, m, done: doneTasks, wound, note: form.elements.note.value, signed: form.elements.signed.checked, teach: form.elements.teach.checked };
+  j.record = { t: state.now, m, done: doneTasks, wound, note: form.elements.note.value, signed: form.elements.signed.checked, teach: form.elements.teach.checked, voice: voiceTxt || null, aiFilled: form.dataset.aiFilled === '1', pu: p.pu && form.elements.pu && form.elements.pu.value ? p.pu : null };
   jobStep(j, state.rn.nurse);
   if (j.first) { p.transitionChecks = p.transitionChecks || {}; p.transitionChecks.tech = true; }
   if (form.elements.teach.checked) { p.transitionChecks = p.transitionChecks || {}; p.transitionChecks.edu = p.transitionChecks.edu || !!state.edu[p.id]; decide(p.id, '衛教', '到府回述確認完成（' + STAFF[state.rn.nurse].name + '）', STAFF[state.rn.nurse].name); }
-  decide(p.id, '到府訪視', '完成：' + doneTasks.join('、') + (wound ? '；傷口 ' + wound : '') + (form.elements.note.value ? '；' + form.elements.note.value : ''), STAFF[state.rn.nurse].name);
+  decide(p.id, '到府訪視', '完成：' + doneTasks.join('、') + (wound ? '；傷口 ' + wound : '') + puNote + (voiceTxt ? '；語音紀錄→結構化草稿，護理師核對後送出' : '') + (form.elements.note.value ? '；' + form.elements.note.value : ''), STAFF[state.rn.nurse].name);
   save(); state.rn.screen = 'route'; render();
   toast(r.created ? '紀錄已送出；量測觸發' + (r.created.level === 'red' ? '紅色' : '黃色') + '警示，戰情室已分派' : '紀錄已送出並完成打卡；量測符合個別目標');
 }
@@ -3840,6 +3910,8 @@ const fhirQty = (value, unit, code) => ({ value, unit, system: 'http://unitsofme
 
 function buildHahBundle(pid, kind) {
   kind = kind === 'transfer' ? 'transfer' : 'discharge';
+  /* V3.12 示範資料的日期是 'M/D'（相對今天換算）；FHIR 需要 YYYY-MM-DD：年份取今年，若月日在今天之後則視為去年 */
+  const ymd = (v) => { if (!v) return undefined; const str = String(v); if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str; const m = /^(\d{1,2})\/(\d{1,2})$/.exec(str); if (!m) return undefined; const today = tpYmd(nowReal()); let y = +today.slice(0, 4); const mm = +m[1], dd = +m[2]; if (mm > +today.slice(5, 7) || (mm === +today.slice(5, 7) && dd > +today.slice(8, 10))) y -= 1; return y + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0'); };
   const p = PX(pid); if (!p || !p.ms) return null;
   const m = latest(p), L = lightOf(p), now = fhirDT(state.now), today = fhirDT(state.now).slice(0, 10);
   const R = []; const add = (res) => { R.push(res); return fhirRef(res.resourceType, res.id, res.resourceType === 'Practitioner' ? res.name[0].text : undefined); };
@@ -3868,14 +3940,14 @@ function buildHahBundle(pid, kind) {
   /* 療程與整段照護 */
   const outcome = kind === 'transfer' ? 'hospital-transfer' : 'completed-treatment';
   const eocRef = add({ resourceType: 'EpisodeOfCare', id: ids.eoc, meta: { profile: [FHIR_PROF('HAHEpisodeOfCare')] }, extension: [{ url: FHIR_PROF('ExtHAHOutcome'), valueCodeableConcept: fhirCC(FHIR_CS('hah-outcome'), outcome) }],
-    identifier: [{ system: FHIR_SYS + '/episodes', value: 'HAH-' + pid + '-' + String(p.discharge || '').replace(/-/g, '') }], status: 'finished', type: [fhirCC(FHIR_CS('hah-activity'), 'acute-home', '在宅急症照護')],
-    diagnosis: condRefs.map((r, i) => ({ condition: r, rank: i + 1 })), patient: patRef, managingOrganization: orgRef, period: { start: p.discharge, end: now }, careManager: practitioner(p.md), team: [fhirRef('CareTeam', ids.team)] });
+    identifier: [{ system: FHIR_SYS + '/episodes', value: 'HAH-' + pid + '-' + String(ymd(p.discharge) || '').replace(/-/g, '') }], status: 'finished', type: [fhirCC(FHIR_CS('hah-activity'), 'acute-home', '在宅急症照護')],
+    diagnosis: condRefs.map((r, i) => ({ condition: r, rank: i + 1 })), patient: patRef, managingOrganization: orgRef, period: { start: ymd(p.discharge), end: now }, careManager: practitioner(p.md), team: [fhirRef('CareTeam', ids.team)] });
   const admRef = add({ resourceType: 'Encounter', id: ids.adm, meta: { profile: [FHIR_PROF('HAHAdmissionEncounter')] }, status: 'finished', class: { system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode', code: 'IMP', display: 'inpatient encounter' }, type: [fhirCC(FHIR_CS('hah-activity'), 'acute-home', '在宅急症照護')],
-    subject: patRef, episodeOfCare: [eocRef], participant: participants(p.md, p.rn), period: { start: p.discharge, end: now }, diagnosis: [{ condition: dxRef, rank: 1 }], serviceProvider: orgRef, location: [{ location: locRef }],
+    subject: patRef, episodeOfCare: [eocRef], participant: participants(p.md, p.rn), period: { start: ymd(p.discharge), end: now }, diagnosis: [{ condition: dxRef, rank: 1 }], serviceProvider: orgRef, location: [{ location: locRef }],
     hospitalization: kind === 'transfer' ? { dischargeDisposition: fhirCC('http://terminology.hl7.org/CodeSystem/discharge-disposition', 'other-hcf', 'Other healthcare facility'), destination: orgRef } : { dischargeDisposition: fhirCC('http://terminology.hl7.org/CodeSystem/discharge-disposition', 'home', 'Home') } });
   /* 照護團隊 */
   const teamRef = add({ resourceType: 'CareTeam', id: ids.team, meta: { profile: [FHIR_PROF('HAHCareTeam')] }, status: 'active', subject: patRef, encounter: admRef, managingOrganization: [orgRef],
-    participant: [{ role: [{ text: '主責醫師' }], member: practitioner(p.md), period: { start: p.discharge } }, { role: [{ text: '備援醫師' }], member: practitioner(p.backup) }, { role: [{ text: '訪視護理師' }], member: practitioner(p.rn) }, { role: [{ text: '指揮中心一線護理師' }], member: practitioner('rn1') }, { role: [{ text: '主責機構' }], member: orgRef }].filter((x) => x.member) });
+    participant: [{ role: [{ text: '主責醫師' }], member: practitioner(p.md), period: { start: ymd(p.discharge) } }, { role: [{ text: '備援醫師' }], member: practitioner(p.backup) }, { role: [{ text: '訪視護理師' }], member: practitioner(p.rn) }, { role: [{ text: '指揮中心一線護理師' }], member: practitioner('rn1') }, { role: [{ text: '主責機構' }], member: orgRef }].filter((x) => x.member) });
   /* 量測設備與生命徵象（最新一筆） */
   const devRef = add({ resourceType: 'Device', id: ids.dev, meta: { profile: [FHIR_PROF('HAHDevice')] }, identifier: [{ system: FHIR_SYS + '/devices', value: 'TP-' + p.tech + '-' + pid }], status: 'active', type: { text: 'Tech Pack ' + p.tech + '（居家量測組）' }, patient: patRef, owner: orgRef });
   const obsRefs = []; const measuredAt = fhirDT(m.t);
@@ -3891,7 +3963,7 @@ function buildHahBundle(pid, kind) {
   if (m.glucose != null && !isNaN(m.glucose)) obsRefs.push(add({ resourceType: 'Observation', id: 'obs-' + pid + '-glucose', meta: { profile: [FHIR_PROF('HAHObservationLab')] }, status: 'final', category: [fhirCC('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory', 'Laboratory')], code: fhirCC('http://loinc.org', '2339-0', 'Glucose [Mass/volume] in Blood'), subject: patRef, encounter: admRef, effectiveDateTime: measuredAt, performer: obsPerformer, valueQuantity: fhirQty(m.glucose, 'mg/dL', 'mg/dL'), device: devRef }));
   /* 處方、照護計畫、給藥紀錄 */
   const medRef = add({ resourceType: 'MedicationRequest', id: ids.medrx, meta: { profile: [FHIR_PROF('HAHMedicationRequest')] }, status: kind === 'discharge' ? 'completed' : 'active', intent: 'order', medicationCodeableConcept: { text: String(p.tx).split(/[；;]/)[0].trim() }, subject: patRef, encounter: admRef, authoredOn: fhirDT(p.admit + 'T08:00:00+08:00') || now, requester: practitioner(p.md), reasonReference: [dxRef], dosageInstruction: [{ text: p.tx }] });
-  const planRef = add({ resourceType: 'CarePlan', id: ids.plan, meta: { profile: [FHIR_PROF('HAHCarePlan')] }, extension: [{ url: FHIR_PROF('ExtHAHEpisode'), valueReference: eocRef }], status: kind === 'discharge' ? 'completed' : 'active', intent: 'plan', category: [fhirCC('https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/careplan-category-tw', 'assess-plan')], subject: patRef, encounter: admRef, period: { start: p.discharge }, addresses: [dxRef], activity: [{ reference: medRef }], description: '在宅急症照護計畫：' + PATHWAYS[p.pathway].name + '路徑；監測 ' + PATHWAYS[p.pathway].watch + '；回報頻率 ' + p.freq, text: fhirDiv(p.name + ' 的在宅急症照護計畫：' + PATHWAYS[p.pathway].name + '路徑，監測 ' + PATHWAYS[p.pathway].watch + '，回報頻率 ' + p.freq + '。') });
+  const planRef = add({ resourceType: 'CarePlan', id: ids.plan, meta: { profile: [FHIR_PROF('HAHCarePlan')] }, extension: [{ url: FHIR_PROF('ExtHAHEpisode'), valueReference: eocRef }], status: kind === 'discharge' ? 'completed' : 'active', intent: 'plan', category: [fhirCC('https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/careplan-category-tw', 'assess-plan')], subject: patRef, encounter: admRef, period: { start: ymd(p.discharge) }, addresses: [dxRef], activity: [{ reference: medRef }], description: '在宅急症照護計畫：' + PATHWAYS[p.pathway].name + '路徑；監測 ' + PATHWAYS[p.pathway].watch + '；回報頻率 ' + p.freq, text: fhirDiv(p.name + ' 的在宅急症照護計畫：' + PATHWAYS[p.pathway].name + '路徑，監測 ' + PATHWAYS[p.pathway].watch + '，回報頻率 ' + p.freq + '。') });
   const jobs = (state.dispatch || []).filter((j) => j.pid === pid);
   const doseMatch = /(\d+(?:\.\d+)?)\s*(g|mg)\b/.exec(p.tx || '');
   const medAdmRefs = []; const visitRefs = []; const taskRefs = [];
@@ -4053,7 +4125,7 @@ document.addEventListener('click', (e) => {
   if (b.hasAttribute('data-be-save')) { const api = (document.getElementById('be-api').value || '').trim(), pt = (document.getElementById('be-pt').value || '').trim(); if (api && !/^https:\/\//.test(api)) { toast('API 網址須以 https:// 開頭'); return; } try { if (api) localStorage.setItem('aikeso-api-url', api); else localStorage.removeItem('aikeso-api-url'); if (pt && /^https:\/\//.test(pt)) localStorage.setItem('aikeso-pt-url', pt); else localStorage.removeItem('aikeso-pt-url'); } catch (x) { } closeModal(); toast(api ? '已儲存，改走後端 API' : '已儲存'); if (window.__syncRestart) window.__syncRestart(); render(); return; }
 });
 /* 真實時間：每秒更新頂欄時鐘（不重繪整頁） */
-setInterval(() => { try { const el = document.getElementById('clock'); if (el && typeof fmtClock === 'function') el.textContent = fmtClock(now()); } catch (e) { } }, 1000);
+setInterval(() => { try { const el = document.getElementById('clock'); if (el && typeof fmtClock === 'function') el.textContent = fmtClock(now()) + ((typeof state !== 'undefined' && state && state.offset) ? '　⏩ +' + Math.round(state.offset / 60000) + ' 分' : ''); } catch (e) { } }, 1000);
 /* 每次操作前先把 state.now 更新成真實時間，紀錄的時間戳就是輸入當下 */
 ['pointerdown', 'click', 'submit', 'change', 'keydown'].forEach((ev) => document.addEventListener(ev, () => { try { now(); } catch (e) { } }, true));
 
@@ -4315,7 +4387,7 @@ document.addEventListener('click', (e) => {
 /* ===================== 渲染與事件 ===================== */
 let drawerPid = null;
 function render() {
-  document.getElementById('clock').textContent = fmtClock(now());
+  document.getElementById('clock').textContent = fmtClock(now()) + (state.offset ? '　⏩ +' + Math.round(state.offset / MIN) + ' 分' : '');
   document.querySelectorAll('.seg [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === state.tab)));
   const v = document.getElementById('view');
   const y = v.scrollTop;
@@ -4348,7 +4420,8 @@ const TWIN_LOCATIONS={
  'AK-016':{address:'臺中市東區示範路16號',km:5.7},
  'AK-030':{address:'臺中市太平區示範路30號',km:11.2},
  'AK-031':{address:'臺中市示範護理之家（虛構機構，區域未設定）',km:7.5},
- 'AK-033':{address:'臺中市烏日區示範路33號',km:13.8}
+ 'AK-033':{address:'臺中市烏日區示範路33號',km:13.8},
+ 'AK-036':{address:'臺中市西屯區示範路36號',km:5.1}
 };
 function twinLocation(p){return TWIN_LOCATIONS[p.id]||{address:p.addr||'住址待補',km:null};}
 function twinDistance(p){const loc=twinLocation(p);return loc.km==null?'待確認':loc.km.toFixed(1)+' 公里（模擬）';}
@@ -4450,7 +4523,7 @@ function promptText(title, ph, cb) { openModal(title, '<textarea id="pt-text" ro
 function aboutHtml() {
   return '<div style="font-size:18.5px;line-height:1.65">' +
     '<p style="margin:0 0 8px"><b>這是什麼</b>：中國附醫虛擬醫院（AiKESO@Home）系統的可操作原型——<b>戰情室</b>（指揮中心看板）、<b>醫師端 App</b>（醫護端）、<b>病人端 App</b>（中國醫點通擴充模組）與<b>到府派工 App</b>（訪視護理師）共用同一份「病患旅程資料」，示範 HaH（在宅急症照護）病人從量測回傳、規則判讀、警示接手到解除的完整閉環。</p>' +
-    '<p style="margin:0 0 8px"><b>示範資料</b>：8 位虛構病人（肺炎、泌尿道感染、皮膚軟組織感染；心衰竭路徑 10/29 起暫停、Phase 2 重啟，資料與規則保留未啟用），姓名以○○遮蔽，所有數值均為設計用途，非真實病歷。</p>' +
+    '<p style="margin:0 0 8px"><b>時間（V3_12）</b>：時鐘為真實時間（台北），每 30 秒更新；回應時限、逾時、資料品質以真實時間計算。示範資料的「幾小時前」「今日 HH:MM」「日期」在載入時以現在換算，敘事相對關係不變；「+30 分」為示範位移，重設後回到真實時間。<br><b>示範資料</b>：9 位虛構病人（肺炎、泌尿道感染、皮膚軟組織感染、在家化療示範；心衰竭路徑 10/29 起暫停、Phase 2 重啟，資料與規則保留未啟用）。<b>A1 模組（11/03，示範）</b>：壓傷分期草稿、語音護理紀錄、化療副作用追蹤——AI 輸出皆為草稿，護理師確認才成紀錄；無真實模型，分期與語音解析為規則模擬，姓名以○○遮蔽，所有數值均為設計用途，非真實病歷。</p>' +
     '<p style="margin:0 0 8px"><b>判讀邏輯</b>：快速安全流以核定規則（規則引擎 ' + RULE_VERSION + '，不經 LLM）比較「出院基準 B0 ＋ 個別目標 ＋ 危急界線 ＋ 相對 B0 變化幅度」，輸出紅／黃／綠與獨立的「資料品質」燈號；病情燈號與工作狀態（待確認→已接手→處理中→待重評→已解除）分開；未解除警示保留，缺資料不變綠。深度分析流（AI 病情整理、兩軌鑑別、六段式衛教、交班摘要）在此以模板產生草稿，實際由 LLM 生成並經醫師確認。</p>' +
     '<p style="margin:0 0 8px"><b>怎麼玩</b>：① 戰情室按「接手」處理紅色警示 → 選處理方式 → 處置後重評 → 解除；② 切到病人端，「量測」頁按「填入惡化示範值」送出，回到戰情室看新警示；③ 醫師端「轉銜」對候選病人做收案評估並建檔——新病人出現在戰情室、首訪自動派工；④ 醫師端產生六段式衛教並發布，再到病人端「衛教」查看；⑤ 到府派工 App 完成三點打卡與到府紀錄，量測同樣進入規則引擎；⑥ 綠燈且無警示的病人可由醫師結案，進入戰情室「結案後追蹤」並可登錄 14 天事件；⑦ 「⏩ +30 分」推進模擬時間觀察回應時限逾時與資料品質事件；「重設」回到初始狀態。狀態只存在您的瀏覽器。</p>' +
     '<p style="margin:0"><b>對應文件</b>：虛擬醫院（AiKESO@Home）系統規劃書大綱 v0.1——§3 整體架構、§4 病人端、§5 醫師端、§6 戰情室；門檻與時限均為草案，待團隊核定（附錄 F）。</p></div>';
@@ -4478,7 +4551,7 @@ document.addEventListener('click', (e) => {
   if (t.dataset.videoClear) { try { localStorage.removeItem(VIDEO_LINK_KEY); } catch (e) { } closeModal(); toast('已清除此裝置的會議連結'); return; }
   if (t.id === 'drawer-close') { closeDrawer(); return; }
   if (t.id === 'modal-close') { closeModal(); return; }
-  if (t.id === 'btn-time') { stepTime(30); toast('模擬時間 +30 分'); return; }
+  if (t.id === 'btn-time') { stepTime(30); toast('示範位移 +30 分（時鐘仍以真實時間前進；按「重設」回到真實時間）'); return; }
   if (t.id === 'btn-about') { openModal('關於這個原型', aboutHtml()); return; }
   if (t.id === 'btn-reset') { resetAll(); return; }
   if (t.dataset.act) {
@@ -4501,11 +4574,13 @@ document.addEventListener('submit', (e) => {
 });
 document.addEventListener('change', (e) => {
   if (e.target.id === 'pt-sel') { state.pt.pid = e.target.value; state.pt.screen = 'today'; render(); }
-  if (e.target.name === 'd' && e.target.checked && e.target.closest('#pt-report')) { dangerNow(state.pt.pid, PT_DANGER[parseInt(e.target.value)]); }
+  if (e.target.name === 'd' && e.target.checked && e.target.closest('#pt-report')) { dangerNow(state.pt.pid, dangerList(P(state.pt.pid))[parseInt(e.target.value)]); }
   if (e.target.id === 'rn-sel') { state.rn.nurse = e.target.value; state.rn.screen = 'route'; state.rn.job = null; render(); }
   if (e.target.dataset && e.target.dataset.supply !== undefined) { state.supplies[parseInt(e.target.dataset.supply)].got = e.target.checked; save(); }
 });
 document.getElementById('scrim').addEventListener('click', closeDrawer);
+/* 真實時間 tick（V3_12） */
+setInterval(() => { state.now = new Date(Date.now() + (state.offset || 0)).toISOString(); const c = document.getElementById('clock'); if (c) c.textContent = fmtClock(now()) + (state.offset ? '　⏩ +' + Math.round(state.offset / MIN) + ' 分' : ''); const ae = document.activeElement; const typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName); const modalOn = document.getElementById('modal').classList.contains('on'); if (!typing && !modalOn && state.tab === 'war') { state.patients.forEach((p) => { const ev = evaluate(p); if (ev.dq && !state.alerts.some((a) => a.pid === p.id && a.level === 'dq' && a.status < 4)) createAlert(p.id, 'dq', ev.dqReasons.join('；'), ev); }); save(); render(); } }, 30000);
 document.getElementById('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeDrawer(); } });
 
@@ -4921,7 +4996,6 @@ main{padding:20px 16px 48px}
 .ptlink small{font-size:10.5px;color:var(--ink-3);word-break:break-all;line-height:1.25}
 @media (max-width:700px){.ptlinks{grid-template-columns:1fr 1fr}}
 /* 真實時間：移除模擬快轉按鈕 */
-#btn-time{display:none!important}
 /* 視訊邀請：病人端來電畫面、醫師端狀態、戰情室清單 */
 .callin{position:fixed;inset:0;z-index:125;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#0b3a4f,#0f5a5a);padding:24px;color:#fff;text-align:center}
 .callin[hidden]{display:none}
@@ -5017,7 +5091,7 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793587714396') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793719489945') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
