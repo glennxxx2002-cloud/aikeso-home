@@ -3298,7 +3298,7 @@ function alertActions(a, who) {
   if (a.status === 3) acts.push('<button class="btn xs primary" data-act="resolve" data-a="' + a.id + '" data-who="' + who + '">解除</button>');
   if (a.level === 'yellow' && a.status < 4) acts.push('<button class="btn xs" data-act="escalate" data-a="' + a.id + '" data-who="' + who + '">升級為紅</button>');
   if (a.level === 'dq' && a.status < 4) acts.push('<button class="btn xs" data-act="lost" data-a="' + a.id + '" data-who="' + who + '">啟動失聯流程</button>');
-  acts.push('<button class="btn xs" data-act="video" data-a="' + a.id + '" data-who="' + who + '">視訊</button>');
+  acts.push(joinBtn(a.pid)); acts.push('<button class="btn xs" data-act="video" data-a="' + a.id + '" data-who="' + who + '">視訊</button>');
   acts.push('<button class="btn xs" data-act="case" data-p="' + a.pid + '">個案卡</button>');
   return acts.join('');
 }
@@ -3569,7 +3569,7 @@ function renderDoc() {
     top = '<div class="ph-top"><div class="ttl"><button class="btn xs" data-doc="list">‹ 在案</button> 個案卡</div><div class="sub">' + p.id + '・' + esc(p.name) + '・Tech Pack ' + p.tech + '</div></div>';
     const canClose = L.light === 'green' && !L.open.length && !L.dq;
     body = '<div class="pcard">' + caseCard(p, 'doc') + '</div>' +
-      '<div class="pcard"><h3>醫師動作</h3>' + callChip(p.id) + '<div class="btn-row"><button class="btn sm primary" data-act="video-p" data-p="' + p.id + '">發起視訊（通知病人）</button><button class="btn sm" data-act="edu" data-p="' + p.id + '">出院衛教（六段式）</button><button class="btn sm" data-act="targets" data-p="' + p.id + '">調整個別目標</button><button class="btn sm" data-act="order" data-p="' + p.id + '">開立醫囑（HIS）</button><button class="btn sm ' + (canClose ? '' : '') + '" data-act="close" data-p="' + p.id + '">結案確認</button></div><div class="note" style="margin-top:6px">P1：醫囑於既有 HIS 開立、App 內顯示；P2 行動下醫囑與電子簽章。結案須由醫師確認療程、症狀、功能與後續安排；綠燈不自動結案。</div></div>';
+      '<div class="pcard"><h3>醫師動作</h3>' + callChip(p.id) + '<div class="btn-row"><button class="btn sm primary" data-act="video-p" data-p="' + p.id + '">發起視訊（通知病人）</button>' + joinBtn(p.id, 'sm') + '<button class="btn sm" data-act="edu" data-p="' + p.id + '">出院衛教（六段式）</button><button class="btn sm" data-act="targets" data-p="' + p.id + '">調整個別目標</button><button class="btn sm" data-act="order" data-p="' + p.id + '">開立醫囑（HIS）</button><button class="btn sm ' + (canClose ? '' : '') + '" data-act="close" data-p="' + p.id + '">結案確認</button></div><div class="note" style="margin-top:6px">P1：醫囑於既有 HIS 開立、App 內顯示；P2 行動下醫囑與電子簽章。結案須由醫師確認療程、症狀、功能與後續安排；綠燈不自動結案。</div></div>';
   } else if (d.screen === 'alerts') {
     top = '<div class="ph-top"><div class="ttl">警示接收與分級處置</div><div class="sub">未解除 ' + open.length + '・紅色強制推播・規則 ' + RULE_VERSION + '</div></div>';
     body = (open.length ? open.map((a) => { const p = P(a.pid); const s = slaState(a); return '<div class="pcard stripe ' + a.level + '" style="border-radius:8px"><div style="display:flex;gap:8px;align-items:center">' + pill(a.level, a.level === 'red' ? '紅' : a.level === 'yellow' ? '黃' : '資料') + '<b>' + esc(p.name) + '</b><span class="faint num" style="font-size:16px">' + PATHWAYS[p.pathway].short + ' D' + p.day + '</span><span style="margin-left:auto">' + stBadge(a) + '</span></div><div style="font-size:18px;margin-top:5px">' + esc(a.text) + '</div><div class="al-meta faint num" style="font-size:16px;margin-top:4px">' + a.id + '・' + agoText(a.at) + '・<span class="' + (s.over ? 'over' : '') + '" style="' + (s.over ? 'color:var(--red);font-weight:600' : '') + '">' + s.text + '</span>・' + (a.owner ? staff(a.owner) : '尚無人接手') + '</div><div style="margin-top:6px">' + statusFlow(a) + '</div><div class="btn-row" style="margin-top:8px">' + alertActions(a, who) + '</div></div>'; }).join('') : '<div class="empty">沒有未解除的警示</div>') +
@@ -3779,7 +3779,7 @@ function jobCard(j, full) {
   return '<div class="pcard stripe ' + (jobLate(j) ? 'red' : L.light) + '" style="border-radius:8px"><div style="display:flex;gap:8px;align-items:center"><b class="num" style="font-size:20.5px">' + j.time + '</b><b>' + esc(p.name) + '</b><span class="faint" style="font-size:16.5px">' + PATHWAYS[p.pathway].short + ' D' + p.day + '・' + esc(j.area) + '</span><span style="margin-left:auto">' + jobBadge(j) + '</span></div>' +
     '<div class="chip-row" style="margin-top:6px">' + j.tasks.map((t) => '<span class="tag' + (j.first ? ' acc' : '') + '">' + esc(t) + '</span>').join('') + '</div>' +
     '<div class="faint num" style="font-size:16px;margin-top:5px">' + pill(L.light, L.light === 'red' ? '紅' : L.light === 'yellow' ? '黃' : '綠') + ' ' + (L.ev.reasons[0] ? esc(L.ev.reasons[0].s) : '穩定') + (j.log.length ? '・' + j.log.map((l) => l.what + ' ' + fmtT(l.t)).join('・') : '') + '</div>' +
-    '<div class="btn-row" style="margin-top:8px">' + (j.status === 0 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">出發打卡</button>' : j.status === 1 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">到達打卡</button>' : j.status === 2 ? '<button class="btn xs primary" data-act="job-open" data-j="' + j.id + '">填寫到府紀錄</button>' : '<button class="btn xs" data-act="job-open" data-j="' + j.id + '">查看紀錄</button>') + '<button class="btn xs" data-act="rn-video" data-p="' + p.id + '">視訊</button><button class="btn xs" data-act="case" data-p="' + p.id + '">個案卡</button><button class="btn xs" data-act="rn-nav" data-j="' + j.id + '">導航</button></div></div>';
+    '<div class="btn-row" style="margin-top:8px">' + (j.status === 0 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">出發打卡</button>' : j.status === 1 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">到達打卡</button>' : j.status === 2 ? '<button class="btn xs primary" data-act="job-open" data-j="' + j.id + '">填寫到府紀錄</button>' : '<button class="btn xs" data-act="job-open" data-j="' + j.id + '">查看紀錄</button>') + '' + joinBtn(p.id) + '<button class="btn xs" data-act="rn-video" data-p="' + p.id + '">視訊</button><button class="btn xs" data-act="case" data-p="' + p.id + '">個案卡</button><button class="btn xs" data-act="rn-nav" data-j="' + j.id + '">導航</button></div></div>';
 }
 function renderRn() {
   const s = state.rn; const nurse = s.nurse; const jobs = jobsOf(nurse); const done = jobs.filter((j) => j.status === 3).length;
@@ -4138,10 +4138,22 @@ function callChip(pid) {
   const s = callStatus(c);
   return '<div class="callchip s-' + s + '" data-callchip="' + esc(pid) + '">📹 視訊邀請 ' + fmtT(c.at) + '・' + esc(c.by) + '・<b>' + CALL_LABEL[s] + (c.respondedAt ? ' ' + fmtT(c.respondedAt) : '') + '</b></div>';
 }
+/* 進行中的視訊：最近一次已接聽／已同意、30 分鐘內的通話。第三方（戰情室、醫師、護理師）按「加入視訊」直接開同一場會議，
+   不再對病人發邀請、不再響鈴；加入者記在該通話與決策紀錄裡，戰情室「視訊邀請」卡看得到誰加入 */
+const JOIN_WINDOW = 30 * MIN;
+function activeCall(pid) { return (state.calls || []).filter((c) => c.pid === pid && callStatus(c) === 'accepted' && Date.now() - Date.parse(c.respondedAt || c.at) < JOIN_WINDOW).slice(-1)[0] || null; }
+function joinerName() { const r = roleNow(); const u = window.__currentUser && window.__currentUser.name; if (r === 'war') return '戰情室' + (u ? '・' + u : ''); return u || (r === 'doc' ? '醫師' : r === 'rn' ? '護理師' : '醫護'); }
+function joinBtn(pid, cls) { if (!activeCall(pid)) return ''; return '<button type="button" class="btn ' + (cls || 'xs') + ' primary" data-join-video="' + esc(pid) + '" title="加入進行中的視訊；不會再通知病人">📹 加入視訊（進行中）</button>'; }
+function joinVideo(pid) {
+  const c = activeCall(pid); if (!c) { toast('目前沒有進行中的視訊'); render(); return; }
+  now(); const who = joinerName(); c.joined = (c.joined || []).concat([{ who, t: state.now }]); if (window.__ownCall) window.__ownCall(c);
+  decide(pid, '視訊', '加入進行中的視訊（' + who + '・' + videoLabel(videoTarget(pid)) + '）', who); save(); render(); startVideo(pid);
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('button[data-join-video]'); if (!b) return; e.preventDefault(); e.stopPropagation(); joinVideo(b.dataset.joinVideo); }, true);
 function callsPanel() {
   const cs = (state.calls || []).slice(-6).reverse();
   if (!cs.length) return '<div class="note">尚無視訊。醫師在個案卡按「發起視訊（通知病人）」，病人同意後進入視訊；病人在「求助」按「視訊」會呼叫戰情室，戰情室可接聽或回覆忙線。</div>';
-  return '<div class="calls">' + cs.map((c) => { const s = callStatus(c); const pt = isPtCall(c); return '<div class="callrow s-' + s + (pt ? ' pt2war' : '') + '"><b>' + (pt ? esc(PX(c.pid).name) + ' → 戰情室' : esc(c.by) + ' → ' + esc(PX(c.pid).name)) + '</b><span>' + fmtT(c.at) + '</span><em>' + callLabel(c, s) + (c.respondedAt ? ' ' + fmtT(c.respondedAt) : '') + (c.answeredBy && s === 'accepted' ? '・' + esc(c.answeredBy) : '') + '</em></div>'; }).join('') + '</div>';
+  return '<div class="calls">' + cs.map((c) => { const s = callStatus(c); const pt = isPtCall(c); return '<div class="callrow s-' + s + (pt ? ' pt2war' : '') + '"><b>' + (pt ? esc(PX(c.pid).name) + ' → 戰情室' : esc(c.by) + ' → ' + esc(PX(c.pid).name)) + '</b><span>' + fmtT(c.at) + '</span><em>' + callLabel(c, s) + (c.respondedAt ? ' ' + fmtT(c.respondedAt) : '') + (c.answeredBy && s === 'accepted' ? '・' + esc(c.answeredBy) : '') + (c.joined && c.joined.length ? '・' + c.joined.map((j) => esc(j.who)).join('、') + ' 加入' : '') + '</em>' + (activeCall(c.pid) === c ? joinBtn(c.pid) : '') + '</div>'; }).join('') + '</div>';
 }
 /* 醫師端：送出邀請並自己先進會議（在點擊當下開 Teams，避免被擋） */
 function inviteVideo(pid, who) {
@@ -4963,6 +4975,7 @@ main{padding:20px 16px 48px}
 .calls{display:flex;flex-direction:column;gap:4px}
 .callrow{display:flex;align-items:baseline;gap:10px;padding:6px 10px;border:1px solid var(--line-soft);border-left-width:5px;border-radius:8px;font-size:15.5px}
 .callrow em{margin-left:auto;font-style:normal;font-weight:600;white-space:nowrap}
+.callrow{flex-wrap:wrap}.callrow b{flex:none;white-space:nowrap}.callrow button[data-join-video]{flex:0 0 auto;margin-left:auto}
 .callrow.s-ringing{border-left-color:#d9822b}.callrow.s-accepted{border-left-color:#1f9d55}.callrow.s-declined,.callrow.s-missed{border-left-color:#c0392b}
 /* 新版本提示列 */
 .upd-bar{position:fixed;left:0;right:0;top:0;z-index:140;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1E3A66;color:#fff;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
@@ -5041,7 +5054,7 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793719489945') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793756441540') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
