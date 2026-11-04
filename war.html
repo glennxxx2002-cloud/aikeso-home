@@ -4462,10 +4462,21 @@ function dartBox() {
   return '<div id="rn-dart" hidden><div class="faint" style="font-size:15px;margin:8px 0 2px">護理紀錄草稿（DART，載入住院護理系統焦點紀錄前請核對）</div><div class="dart">' +
     [['D', 'dartD', '資料：生命徵象與觀察'], ['A', 'dartA', '處置：執行項目與回傳戰情室'], ['R', 'dartR', '反應：病人／照顧者反應與回述'], ['T', 'dartT', '衛教內容']].map(([k, nm, ph]) => '<b>' + k + '</b><textarea name="' + nm + '" rows="2" placeholder="' + ph + '"></textarea>').join('') + '</div></div>';
 }
+/* D 欄的生命徵象句子永遠跟表單目前的數值一致：改任一量測欄位即時重寫，送出前再對一次（持續更新時 DART 不會留著舊數值） */
+function dartVitalsLine(f) { const v = (k) => f.elements[k] ? f.elements[k].value : ''; return '生命徵象 BP ' + v('sbp') + '/' + v('dbp') + '、HR ' + v('hr') + '、SpO₂ ' + v('spo2') + '%、T ' + v('temp') + '、RR ' + v('rr') + (parseFloat(v('o2')) ? '、O₂ ' + v('o2') + ' L/min' : '') + (f.elements.conscious ? '、意識' + f.elements.conscious.value : ''); }
+function dartRefreshVitals(f) {
+  const el = f && f.elements && f.elements.dartD; if (!el || !el.value.trim()) return false;
+  const line = dartVitalsLine(f); const re = /生命徵象 BP [^；。]*/;
+  if (re.test(el.value)) { const nv = el.value.replace(re, line); if (nv !== el.value) { el.value = nv; el.classList.add('ai-fill'); } }
+  else { el.value = el.value.replace(/。?\s*$/, '') + '；最新量測 ' + fmtT(now()).slice(-5) + '：' + line + '。'; el.classList.add('ai-fill'); }
+  return true;
+}
+document.addEventListener('input', (e) => { const t = e.target; if (t && t.form && t.form.id === 'rn-form' && /^(sbp|dbp|hr|spo2|temp|rr|o2|conscious)$/.test(t.name || '')) dartRefreshVitals(t.form); });
+document.addEventListener('change', (e) => { const t = e.target; if (t && t.form && t.form.id === 'rn-form' && t.name === 'conscious') dartRefreshVitals(t.form); });
 function dartDraft(f, p, j, voice) {
   const v = (k) => f.elements[k] ? f.elements[k].value : '';
   const notes = (v('note') || '').split('；').filter(Boolean);
-  const D = '到府訪視。生命徵象 BP ' + v('sbp') + '/' + v('dbp') + '、HR ' + v('hr') + '、SpO₂ ' + v('spo2') + '%、T ' + v('temp') + '、RR ' + v('rr') + (parseFloat(v('o2')) ? '、O₂ ' + v('o2') + ' L/min' : '') + (f.elements.conscious ? '、意識' + f.elements.conscious.value : '') + (notes.length ? '；' + notes.join('、') : '') + (v('wound') ? '；傷口 ' + v('wound') : '') + '。';
+  const D = '到府訪視。' + dartVitalsLine(f) + (notes.length ? '；' + notes.join('、') : '') + (v('wound') ? '；傷口 ' + v('wound') : '') + '。';
   const tasks = [...f.querySelectorAll('input[name=task]:checked')].map((c) => j.tasks[parseInt(c.value)]);
   const A = (tasks.length ? tasks.join('、') : '生命徵象量測') + '；量測與觀察回傳戰情室，由規則引擎比對 B0 與個別目標' + (f.elements.pu && f.elements.pu.value ? '；壓傷評估 ' + f.elements.pu.value : '') + '。';
   const R = (f.elements.teach && f.elements.teach.checked ? '病人／照顧者回述正確，可了解' : '病人／照顧者可了解') + (/家屬.*(會|能).*(血氧|操作)/.test(voice) ? '；家屬能操作血氧機' : '') + '。';
@@ -4484,6 +4495,7 @@ function a1AfterParse(f) {
 /* 送出到府紀錄時：DART、CTCAE 評分、壓傷換藥方式與起始日一併入紀錄；CTCAE 進 R-CHEMO-02 */
 function a1OnSubmit(form, p, j) {
   const by = STAFF[state.rn.nurse].name; const notes = [];
+  dartRefreshVitals(form); /* 送出前把 D 欄的生命徵象對齊表單最新數值 */
   const dart = { D: form.elements.dartD ? form.elements.dartD.value.trim() : '', A: form.elements.dartA ? form.elements.dartA.value.trim() : '', R: form.elements.dartR ? form.elements.dartR.value.trim() : '', T: form.elements.dartT ? form.elements.dartT.value.trim() : '' };
   if (dart.D || dart.A || dart.R || dart.T) { j.record.dart = dart; notes.push('DART 草稿已核對（正式版寫入住院護理系統）'); }
   if (p.pu && form.elements.pu && form.elements.pu.value) { p.pu.dressing = form.elements.puDress ? form.elements.puDress.value : ''; p.pu.start = form.elements.puStart ? form.elements.puStart.value : ''; }
@@ -4527,7 +4539,7 @@ function prefillRecord(jid) {
   set('note', rec.note); set('wound', rec.wound); set('voice', rec.voice);
   if (f.elements.idc) f.elements.idc.checked = true; if (f.elements.teach) f.elements.teach.checked = !!rec.teach; if (f.elements.signed) f.elements.signed.checked = !!rec.signed;
   f.querySelectorAll('input[name=task]').forEach((c) => { c.checked = rec.done.includes(j.tasks[parseInt(c.value)]); });
-  if (rec.dart) { const box = document.getElementById('rn-dart'); if (box) box.hidden = false; ['D', 'A', 'R', 'T'].forEach((k) => set('dart' + k, rec.dart[k])); }
+  if (rec.dart) { const box = document.getElementById('rn-dart'); if (box) box.hidden = false; ['D', 'A', 'R', 'T'].forEach((k) => set('dart' + k, rec.dart[k])); if (typeof dartRefreshVitals === 'function') dartRefreshVitals(f); }
   if (p.ctcae && p.ctcae.grades && typeof ctcaeSet === 'function') Object.entries(p.ctcae.grades).forEach(([ae, g]) => ctcaeSet(f, ae, g, false));
   f.insertAdjacentHTML('afterbegin', '<div class="note" style="margin-bottom:8px"><b>更新模式</b>：已填回上一次紀錄（' + fmtT(rec.t) + '，第 ' + ((j.records || []).length) + ' 次）。改好後按「送出更新」，戰情室與醫師端數秒內同步；每次送出都新增一筆量測並重新判讀燈號。</div>');
 }
@@ -5219,7 +5231,7 @@ table.t tbody tr.row.fresh td:nth-child(4)::after{content:"剛更新";position:a
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793773809302') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793774454120') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
