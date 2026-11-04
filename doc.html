@@ -3344,7 +3344,8 @@ function caseCard(p, ctx) {
   h += '<div class="sec"><h4>最新量測 vs B0 出院基準</h4>' + vitalsGrid(p) + '</div>';
   h += '<div class="sec"><h4>判讀依據（規則引擎 ' + RULE_VERSION + '）</h4>' + reasonsList(L) + '</div>';
   h += '<div class="sec"><h4>近期趨勢</h4>' + sparks(p) + '</div>';
-  if (p.pu) h += '<div class="sec"><h4>壓力性損傷（A1 分期）</h4><div class="note">護理師確認：<b>' + esc(p.pu.stage) + '</b>（' + fmtT(p.pu.t) + '，' + esc(p.pu.by) + '）' + (p.pu.aiDraft ? '；AI 草稿 ' + esc(p.pu.aiDraft.stage) + '（信心 ' + Math.round(p.pu.aiDraft.conf * 100) + '%，' + esc(p.pu.aiDraft.size) + '）' : '') + (p.puHist && p.puHist.length > 1 ? '；歷次：' + p.puHist.map((x) => esc(x.stage)).join(' → ') : '') + '</div></div>';
+  if (p.pu) h += '<div class="sec"><h4>壓力性損傷（A1 分期）</h4><div class="note">護理師確認：<b>' + esc(p.pu.stage) + '</b>（' + fmtT(p.pu.t) + '，' + esc(p.pu.by) + '）' + (p.pu.aiDraft ? '；AI 草稿 ' + esc(p.pu.aiDraft.stage) + '（信心 ' + Math.round(p.pu.aiDraft.conf * 100) + '%，' + esc(p.pu.aiDraft.size) + '）' : '') + (p.puHist && p.puHist.length > 1 ? '；歷次：' + p.puHist.map((x) => esc(x.stage)).join(' → ') : '') + (p.pu.dressing ? '；換藥方式 ' + esc(p.pu.dressing) + (p.pu.start ? '（起始 ' + esc(p.pu.start) + '）' : '') : '') + '</div></div>';
+  h += ctcaeCaseSection(p);
   if ((m.symptoms || []).length || (m.danger || []).length) h += '<div class="sec"><h4>症狀回報</h4><div class="chip-row">' + (m.danger || []).map((s) => '<span class="pill red">' + esc(s) + '</span>').join('') + (m.symptoms || []).map((s) => '<span class="tag">' + esc(s) + '</span>').join('') + (m.photo ? '<span class="tag acc">傷口照片已上傳</span>' : '') + '</div></div>';
   h += '<div class="sec"><h4>警示與工作狀態</h4>' + (open.length ? open.map((a) => '<div class="al stripe ' + a.level + '" style="margin-bottom:8px"><div>' + stBadge(a) + '</div><div><div class="who">' + esc(a.text) + '</div><div class="meta"><span>' + a.id + '</span><span>' + fmtT(a.at) + '</span><span>' + esc(a.rule) + '</span><span>負責 ' + staff(a.owner) + '</span></div>' + statusFlow(a) + '</div><div></div><div class="acts">' + alertActions(a, who) + '</div></div>' + '<details class="acc"><summary>處置紀錄（' + a.log.length + '）</summary><div class="acc-b">' + alertLogHtml(a) + '</div></details>').join('') : '<div class="note">目前沒有未解除的警示。</div>') + '</div>';
   h += '<div class="sec"><h4>個別目標與界線</h4>' + targetsList(p) + '</div>';
@@ -3814,11 +3815,11 @@ function renderRn() {
     } else {
       const p = P(j.pid); const m = latest(p); const rec = j.record;
       if (rec) {
-        body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・已完成 ' + fmtT(rec.t) + '</span></h3><dl class="kv"><dt>生命徵象</dt><dd class="num">BP ' + rec.m.sbp + '/' + rec.m.dbp + '、HR ' + rec.m.hr + '、RR ' + rec.m.rr + '、SpO₂ ' + rec.m.spo2 + '%、T ' + rec.m.temp.toFixed(1) + (rec.m.weight ? '、體重 ' + rec.m.weight : '') + '</dd><dt>執行</dt><dd>' + rec.done.map(esc).join('、') + '</dd>' + (rec.wound ? '<dt>傷口</dt><dd>' + esc(rec.wound) + '</dd>' : '') + '<dt>備註</dt><dd>' + esc(rec.note || '—') + '</dd><dt>簽名</dt><dd>' + (rec.signed ? '病人／照顧者已簽名' : '未簽名') + '</dd></dl><div class="btn-row" style="margin-top:8px"><button class="btn sm" data-rn="route">回派工清單</button></div></div>';
+        body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・已完成 ' + fmtT(rec.t) + '</span></h3><dl class="kv"><dt>生命徵象</dt><dd class="num">BP ' + rec.m.sbp + '/' + rec.m.dbp + '、HR ' + rec.m.hr + '、RR ' + rec.m.rr + '、SpO₂ ' + rec.m.spo2 + '%、T ' + rec.m.temp.toFixed(1) + (rec.m.weight ? '、體重 ' + rec.m.weight : '') + '</dd><dt>執行</dt><dd>' + rec.done.map(esc).join('、') + '</dd>' + (rec.wound ? '<dt>傷口</dt><dd>' + esc(rec.wound) + '</dd>' : '') + (rec.dart ? '<dt>DART</dt><dd>D：' + esc(rec.dart.D) + '<br>A：' + esc(rec.dart.A) + '<br>R：' + esc(rec.dart.R) + '<br>T：' + esc(rec.dart.T) + '</dd>' : '') + (rec.ctcae ? '<dt>CTCAE</dt><dd>' + (Object.entries(rec.ctcae).filter(([, g]) => g > 0).map(([a, g]) => esc(a) + ' Grade ' + g).join('、') || '全部 Grade 0') + '</dd>' : '') + (rec.pu ? '<dt>壓傷</dt><dd>' + esc(rec.pu.stage) + (rec.pu.dressing ? '・' + esc(rec.pu.dressing) + (rec.pu.start ? '・起始 ' + esc(rec.pu.start) : '') : '') + '</dd>' : '') + '<dt>備註</dt><dd>' + esc(rec.note || '—') + '</dd><dt>簽名</dt><dd>' + (rec.signed ? '病人／照顧者已簽名' : '未簽名') + '</dd></dl><div class="btn-row" style="margin-top:8px"><button class="btn sm" data-rn="route">回派工清單</button></div></div>';
       } else {
         body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・' + j.time + '</span></h3><form id="rn-form" data-j="' + j.id + '">' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin-bottom:8px"><input type="checkbox" name="idc" required> 身分確認（雙重辨識）</label>' +
-          (A1_ENABLED ? '<div class="aibox"><div class="aibox-h">語音護理紀錄 <span class="faint">A1・AI 草稿，護理師核對後才送出</span></div><textarea name="voice" rows="2" placeholder="按「語音輸入」口述，或按「示範語句」"></textarea><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-voice">🎤 語音輸入</button><button class="btn sm" type="button" data-act="rn-voice-demo">示範語句</button><button class="btn sm primary" type="button" data-act="rn-voice-parse">產生結構化草稿</button></div><div class="faint" id="rn-voice-msg" style="font-size:15px;margin-top:4px"></div></div>' : '') +
+          (A1_ENABLED ? '<div class="aibox" id="rn-voicebox"><div class="aibox-h">語音轉文字護理紀錄 <span class="faint">A1・AIRIC 語音辨識＋報告（DART）草稿，護理師核對後才送出</span></div><div class="faint" style="font-size:15px;margin-bottom:6px">AI Prompt：護理紀錄（DART）　錄音上限 60 分鐘　正式版接 AIRIC「取得語音辨識／取得報告」</div><textarea name="voice" rows="2" placeholder="按「語音輸入」口述，或按「示範語句」"></textarea><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-voice">🎤 語音輸入</button><button class="btn sm" type="button" data-act="rn-voice-demo">示範語句</button><button class="btn sm primary" type="button" data-act="rn-voice-parse">取得報告（結構化＋DART 草稿）</button></div><div class="faint" id="rn-voice-msg" style="font-size:15px;margin-top:4px"></div>' + dartBox() + '</div>' : '') +
           '<div class="field" style="margin-bottom:6px"><span><b>生命徵象</b>（同 B0 量測條件：' + esc(p.b0.note.split('，').slice(1).join('，') || '坐姿') + '）</span></div><div class="fgrid">' +
           '<div class="field"><span>收縮壓</span><input type="number" name="sbp" value="' + m.sbp + '" required></div><div class="field"><span>舒張壓</span><input type="number" name="dbp" value="' + m.dbp + '" required></div>' +
           '<div class="field"><span>心跳</span><input type="number" name="hr" value="' + m.hr + '" required></div><div class="field"><span>SpO₂ %</span><input type="number" name="spo2" value="' + m.spo2 + '" required></div>' +
@@ -3826,7 +3827,7 @@ function renderRn() {
           '<div class="field"><span>氧療 L/min</span><input type="number" name="o2" step="0.5" value="' + (m.o2 || 0) + '"></div>' + (p.pathway === 'HF' ? '<div class="field"><span>體重 kg</span><input type="number" name="weight" step="0.1" value="' + (m.weight || '') + '"></div>' : '<div class="field"><span>意識</span><select name="conscious"><option>清醒</option><option>嗜睡</option><option>叫不太醒</option></select></div>') +
           '</div><div class="field" style="margin:10px 0 4px"><span><b>治療與任務執行</b></span></div><div class="opt">' + j.tasks.map((t, i) => '<label><input type="checkbox" name="task" value="' + i + '" checked>' + esc(t) + '</label>').join('') + '</div>' +
           (p.pathway === 'SSTI' ? '<div class="field" style="margin-top:10px"><span>傷口紅腫範圍（cm，對照標記線）</span><input name="wound" placeholder="例：12×9 → 12×9，未超出標記線；無波動感"></div><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-photo" data-p="' + p.id + '">' + ICONS.cam + ' 拍照上傳（對準標記線）</button></div>' : '') +
-          (A1_ENABLED ? '<div class="aibox" style="margin-top:10px"><div class="aibox-h">壓力性損傷評估 <span class="faint">A1・拍照後 AI 分期草稿，護理師確認才成紀錄</span></div><div class="fgrid"><div class="field"><span>前次確認</span><input value="' + esc(p.pu ? p.pu.stage + '（' + fmtT(p.pu.t) + '）' : '無紀錄') + '" disabled></div><div class="field"><span>本次分期（護理師確認）</span><select name="pu"><option value="">未評估</option>' + ['無壓傷', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', '深層組織損傷（DTI）', '無法分期'].map((x) => '<option' + (p.pu && p.pu.stage === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></div></div><input type="hidden" name="puDraft"><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-pu-ai" data-p="' + p.id + '">' + ICONS.cam + ' 拍照→AI 分期草稿（示範）</button></div><div class="faint" id="rn-pu-msg" style="font-size:15px;margin-top:4px"></div></div>' : '') +
+          (A1_ENABLED ? '<div class="aibox" style="margin-top:10px" id="rn-pubox"><div class="aibox-h">壓力性損傷評估 <span class="faint">A1・AIRIC 壓瘡偵測與分級；AI 判讀結果僅供參考，護理師確認才成紀錄</span></div><div class="fgrid"><div class="field"><span>前次確認</span><input value="' + esc(p.pu ? p.pu.stage + '（' + fmtT(p.pu.t) + '）' : '無紀錄') + '" disabled></div><div class="field"><span>本次分期（護理師確認）</span><select name="pu"><option value="">未評估</option>' + ['無壓傷', 'Stage 1', 'Stage 2', 'Stage 3', 'Stage 4', '深層組織損傷（DTI）', '無法分期'].map((x) => '<option' + (p.pu && p.pu.stage === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></div><div class="field"><span>換藥方式</span><select name="puDress">' + ['觀察', '泡棉敷料', '水膠敷料', '銀離子敷料', '其他'].map((x) => '<option' + (p.pu && p.pu.dressing === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></div><div class="field"><span>起始日</span><input type="date" name="puStart" value="' + esc((p.pu && p.pu.start) || tpYmd(now())) + '"></div></div><input type="hidden" name="puDraft"><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-pu-ai" data-p="' + p.id + '">' + ICONS.cam + ' 拍照→AI 分期草稿（示範）</button></div><div class="faint" id="rn-pu-msg" style="font-size:15px;margin-top:4px"></div></div>' + ctcaeBox(p) : '') +
           '<div class="field" style="margin-top:10px"><span>觀察與備註</span><textarea name="note" rows="2" placeholder="例：攝食約半碗，尿量 300 ml；家屬能正確操作血氧機"></textarea></div>' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin:8px 0"><input type="checkbox" name="teach"> 衛教回述確認（病人／照顧者用自己的話說一次）</label>' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin:8px 0"><input type="checkbox" name="signed"> 病人／照顧者電子簽名</label>' +
@@ -3853,8 +3854,8 @@ function handleRnAction(btn) {
   if (act === 'job-open') { state.rn.job = btn.dataset.j; state.rn.screen = 'job'; render(); }
   if (act === 'rn-voice') { voiceStart(); }
   if (act === 'rn-voice-demo') { const f = document.getElementById('rn-form'); const j = state.dispatch.find((x) => x.id === f.dataset.j); const p = P(j.pid); f.elements.voice.value = voiceDemoText(p); document.getElementById('rn-voice-msg').textContent = '已填入示範語句，按「產生結構化草稿」'; }
-  if (act === 'rn-voice-parse') { voiceParse(document.getElementById('rn-form')); }
-  if (act === 'rn-pu-ai') { const f = document.getElementById('rn-form'); const p = P(btn.dataset.p); const d = puDraft(p); f.elements.puDraft.value = JSON.stringify(d); f.elements.pu.value = d.stage; f.elements.pu.classList.add('ai-fill'); document.getElementById('rn-pu-msg').innerHTML = 'AI 草稿：<b>' + esc(d.stage) + '</b>（信心 ' + Math.round(d.conf * 100) + '%，' + esc(d.size) + '，' + esc(d.site) + '）' + (p.pu ? '；前次 ' + esc(p.pu.stage) : '') + '——請核對照片後確認或修改，送出時以護理師選擇為準'; toast('照片已上傳；AI 分期草稿已填入，請確認', 4000); }
+  if (act === 'rn-voice-parse') { const f = document.getElementById('rn-form'); voiceParse(f); a1AfterParse(f); }
+  if (act === 'rn-pu-ai') { const f = document.getElementById('rn-form'); const p = P(btn.dataset.p); const d = puDraft(p); f.elements.puDraft.value = JSON.stringify(d); f.elements.pu.value = d.stage; f.elements.pu.classList.add('ai-fill'); document.getElementById('rn-pu-msg').innerHTML = 'AI 草稿：<b>' + esc(d.stage) + '</b>（信心 ' + Math.round(d.conf * 100) + '%，' + esc(d.size) + '，' + esc(d.site) + '）' + (p.pu ? '；前次 ' + esc(p.pu.stage) : '') + '——AI 判讀結果僅供參考，請核對照片後確認或修改，送出時以護理師選擇為準'; toast('照片已上傳；AI 分期草稿已填入（僅供參考），請確認', 4000); }
   if (act === 'rn-video') { inviteVideo(btn.dataset.p, staff(state.rn.nurse)); return; }
   if (act === 'rn-nav') { const j = state.dispatch.find((x) => x.id === btn.dataset.j); toast('導航至 ' + j.area + '（示範：路線 agent 已排入）'); }
   if (act === 'rn-photo') { const p = P(btn.dataset.p); const m = latest(p); m.photo = true; p.photoMissing = false; save(); toast('傷口照片已上傳，與前次自動比對'); }
@@ -3885,12 +3886,13 @@ function submitVisit(form) {
   const voiceTxt = form.elements.voice ? form.elements.voice.value.trim() : '';
   const r = addMeasurement(p.id, m, '護理到府');
   j.record = { t: state.now, m, done: doneTasks, wound, note: form.elements.note.value, signed: form.elements.signed.checked, teach: form.elements.teach.checked, voice: voiceTxt || null, aiFilled: form.dataset.aiFilled === '1', pu: p.pu && form.elements.pu && form.elements.pu.value ? p.pu : null };
+  const a1Note = a1OnSubmit(form, p, j);
   jobStep(j, state.rn.nurse);
   if (j.first) { p.transitionChecks = p.transitionChecks || {}; p.transitionChecks.tech = true; }
   if (form.elements.teach.checked) { p.transitionChecks = p.transitionChecks || {}; p.transitionChecks.edu = p.transitionChecks.edu || !!state.edu[p.id]; decide(p.id, '衛教', '到府回述確認完成（' + STAFF[state.rn.nurse].name + '）', STAFF[state.rn.nurse].name); }
-  decide(p.id, '到府訪視', '完成：' + doneTasks.join('、') + (wound ? '；傷口 ' + wound : '') + puNote + (voiceTxt ? '；語音紀錄→結構化草稿，護理師核對後送出' : '') + (form.elements.note.value ? '；' + form.elements.note.value : ''), STAFF[state.rn.nurse].name);
+  decide(p.id, '到府訪視', '完成：' + doneTasks.join('、') + (wound ? '；傷口 ' + wound : '') + puNote + (voiceTxt ? '；語音紀錄→結構化草稿，護理師核對後送出' : '') + a1Note + (form.elements.note.value ? '；' + form.elements.note.value : ''), STAFF[state.rn.nurse].name);
   save(); state.rn.screen = 'route'; render();
-  toast(r.created ? '紀錄已送出；量測觸發' + (r.created.level === 'red' ? '紅色' : '黃色') + '警示，戰情室已分派' : '紀錄已送出並完成打卡；量測符合個別目標');
+  const a1t = window.__a1Note || ''; window.__a1Note = ''; toast((r.created ? '紀錄已送出；量測觸發' + (r.created.level === 'red' ? '紅色' : '黃色') + '警示，戰情室已分派' : '紀錄已送出並完成打卡；量測符合個別目標') + (a1t ? '；' + a1t : ''), a1t ? 7000 : undefined);
 }
 /* ===================== FHIR 匯出：TW LTC IG v1.1 在宅急症（HaH）結案／轉銜摘要 document Bundle =====================
    結構依 http://ltc-ig.fhir.tw 的 HAHBundleSummary／HAHCompositionSummary 與相關 Profile 組成；
@@ -4395,6 +4397,122 @@ document.addEventListener('click', (e) => {
     } catch (e) { }
   }, 1500);
 })();
+
+/* ===================== A1 三模組對齊 AIRIC 既有系統（A1 模組規格 v0.1.2，2026/11/03） =====================
+   模組三 化療副作用追蹤：到府紀錄「化療副作用追蹤（CTCAE）」——依處方藥物產生個人化 MAIN AE 清單，護理師逐項評 Grade 0–5；
+     評分進規則引擎 R-CHEMO-02（Grade ≥3 紅、Grade 2 黃、發熱性嗜中性球低下任一級紅）；個案卡顯示最近一次非零項目。
+   模組二 語音轉文字護理紀錄：「取得報告」除了填量測欄位，另產生 DART（D 資料／A 處置／R 反應／T 衛教）四欄草稿，黃底待核對，
+     送出後存 j.record.dart（正式版寫入住院護理系統）。
+   模組一 壓力性損傷評估：加「換藥方式」「起始日」欄位（對齊 AIRIC 介面），AI 草稿一律標「AI 判讀結果僅供參考」。
+   示範版：清單與解析為規則模擬，無真實模型；正式版改呼叫 AIRIC 三支服務（CTCAE 清單、語音辨識與報告、壓瘡分級）。 */
+const CTCAE_FIXED = ['出血', '發熱性嗜中性球低下']; /* 固定列入（規格：發熱性嗜中性球低下與出血） */
+const CTCAE_BY_DRUG = {
+  Capecitabine: ['手足症候群', '腹瀉', '口腔黏膜炎', '噁心', '嘔吐', '疲倦', '嗜中性球減少', '貧血'],
+  Carboplatin: ['嗜中性球減少', '血小板減少', '貧血', '噁心', '嘔吐', '周邊神經病變', '腎功能下降', '過敏反應'],
+  Bleomycin: ['肺炎／肺纖維化', '發燒', '皮膚色素沉著', '口腔黏膜炎', '疲倦'],
+  Cisplatin: ['噁心', '嘔吐', '腎功能下降', '聽力下降', '周邊神經病變', '嗜中性球減少', '貧血'],
+  Paclitaxel: ['周邊神經病變', '嗜中性球減少', '脫髮', '肌肉關節痛', '過敏反應'],
+};
+/* 檢驗型項目的閾值提示（AIRIC 畫面以滑鼠提示呈現） */
+const CTCAE_LAB = {
+  '嗜中性球減少': 'ANC <LLN–1500/mm³ Grade 1；<1500–1000 Grade 2；<1000–500 Grade 3；<500 Grade 4',
+  '貧血': 'Hgb <LLN–10.0 g/dL Grade 1；<10.0–8.0 Grade 2；<8.0 Grade 3；危及生命 Grade 4',
+  '血小板減少': 'Plt <LLN–75k Grade 1；<75k–50k Grade 2；<50k–25k Grade 3；<25k Grade 4',
+  '發熱性嗜中性球低下': 'ANC <1000/mm³ 且單次體溫 ≥38.3 或 ≥38.0 持續 1 小時以上：Grade 3；危及生命 Grade 4',
+};
+const CTCAE_GRADE = ['0 無', '1 輕度', '2 中度', '3 嚴重／需住院', '4 危及生命', '5 死亡'];
+function ctcaeDrugs(p) { const tx = String(p.tx || ''); return Object.keys(CTCAE_BY_DRUG).filter((d) => new RegExp(d, 'i').test(tx)); }
+function ctcaeList(p) { const drugs = ctcaeDrugs(p); const aes = []; const add = (x) => { if (!aes.includes(x)) aes.push(x); }; CTCAE_FIXED.forEach(add); (drugs.length ? drugs : ['Capecitabine']).forEach((d) => CTCAE_BY_DRUG[d].forEach(add)); return { drugs, aes }; }
+function ctcaeBox(p) {
+  if (p.pathway !== 'CHEMO') return '';
+  const { drugs, aes } = ctcaeList(p); const prev = (p.ctcae && p.ctcae.grades) || {};
+  return '<div class="aibox" style="margin-top:10px" id="rn-ctcae"><div class="aibox-h">化療副作用追蹤（CTCAE） <span class="faint">A1・AIRIC 依處方產生的個人化清單；護理師逐項評 Grade 0–5</span></div>' +
+    '<div class="faint" style="font-size:15px;margin-bottom:6px">處方藥物：<b>' + esc(drugs.join('、') || '未辨識，使用通用清單') + '</b>　MAIN AE ' + aes.length + ' 項；Grade ≥3 紅燈、Grade 2 黃燈、發熱性嗜中性球低下任一級紅燈' + (p.ctcae ? '；前次評分 ' + fmtT(p.ctcae.t) + '（' + esc(p.ctcae.by) + '）' : '') + '</div>' +
+    '<div class="ctcae">' + aes.map((ae, i) => '<div class="ctcae-row" data-ae="' + esc(ae) + '"><span class="ctcae-ae">' + esc(ae) + (CTCAE_LAB[ae] ? ' <i title="' + esc(CTCAE_LAB[ae]) + '">ⓘ</i>' : '') + (prev[ae] != null ? '<small>前次 Grade ' + prev[ae] + '</small>' : '') + '</span><span class="ctcae-g">' + [0, 1, 2, 3, 4, 5].map((g) => '<label><input type="radio" name="ct' + i + '" value="' + g + '"' + (g === 0 ? ' checked' : '') + '>' + g + '</label>').join('') + '</span></div>').join('') + '</div>' +
+    '<input type="hidden" name="ctAes" value="' + esc(aes.join('|')) + '">' +
+    '<div class="faint" style="font-size:14.5px;margin-top:6px">Grade：' + CTCAE_GRADE.join('、') + '（CTCAE v5）；檢驗型項目（嗜中性球、貧血）以到府抽血或返院檢驗為準</div></div>';
+}
+function ctcaeSet(f, ae, g, ai) { const row = f.querySelector('.ctcae-row[data-ae="' + ae + '"]'); if (!row) return false; const r = row.querySelector('input[value="' + g + '"]'); if (!r) return false; r.checked = true; row.querySelectorAll('label').forEach((l) => l.classList.remove('ai-fill')); if (ai) r.closest('label').classList.add('ai-fill'); return true; }
+/* 口述內容 → CTCAE 草稿（示範規則；正式版由 AIRIC 服務回傳） */
+function ctcaeFromText(f, t) {
+  let n = 0; const S = (ae, g) => { if (ctcaeSet(f, ae, g, true)) n++; };
+  if (/口腔.*(破|潰瘍|痛)/.test(t)) S('口腔黏膜炎', /吃不下|幾乎/.test(t) ? 3 : /吃得少|吃少/.test(t) ? 2 : 1);
+  const d = t.match(/拉了?([零一二兩三四五六七八九十\d]+)\s*次/); if (d) { const k = cnNum(d[1]); S('腹瀉', k >= 7 ? 3 : k >= 4 ? 2 : k > 0 ? 1 : 0); }
+  const v = t.match(/吐了?([零一二兩三四五六七八九十\d]+)\s*次/); if (v) { const k = cnNum(v[1]); S('嘔吐', k >= 6 ? 3 : k >= 3 ? 2 : k > 0 ? 1 : 0); } else if (/噁心|想吐/.test(t)) S('噁心', /吃不下/.test(t) ? 2 : 1);
+  if (/沒有出血|無出血/.test(t)) S('出血', 0); else if (/出血|瘀青|黑便/.test(t)) S('出血', /不止|黑便|吐血/.test(t) ? 3 : 1);
+  if (/(手掌|腳掌|手腳).*(紅|脫皮|痛)/.test(t)) S('手足症候群', /痛|影響/.test(t) ? 2 : 1);
+  if (/(很累|累到|疲倦)/.test(t)) S('疲倦', /起不來|臥床/.test(t) ? 2 : 1);
+  const tp = f.elements.temp ? parseFloat(f.elements.temp.value) : NaN; if (!isNaN(tp) && tp >= 38.0) S('發熱性嗜中性球低下', 3);
+  return n;
+}
+function ctcaeCollect(f) { const aes = (f.elements.ctAes ? f.elements.ctAes.value : '').split('|').filter(Boolean); const grades = {}; aes.forEach((ae, i) => { const r = f.querySelector('input[name="ct' + i + '"]:checked'); grades[ae] = r ? parseInt(r.value) : 0; }); return aes.length ? grades : null; }
+/* R-CHEMO-02：CTCAE 評分進規則引擎——Grade ≥3 紅、Grade 2 黃、發熱性嗜中性球低下任一級紅；燈號由規則決定，AI 不點燈 */
+function ctcaeRules(p, grades, by) {
+  const hi = Object.entries(grades).filter(([a, g]) => g >= 3 || (a === '發熱性嗜中性球低下' && g >= 1));
+  const mid = Object.entries(grades).filter(([a, g]) => g === 2);
+  const open = state.alerts.filter((a) => a.pid === p.id && a.status < 4 && a.level !== 'dq');
+  if (hi.length) {
+    const text = 'CTCAE ' + hi.map(([a, g]) => a + ' Grade ' + g).join('、') + '（R-CHEMO-02：嚴重／需住院，聯繫腫瘤科主責；發燒 ≥38.0 返院抽血 CBC/ANC）';
+    const red = open.find((a) => a.level === 'red');
+    if (red) { red.reflash = state.now; red.log.push({ t: state.now, who: '規則引擎 R-CHEMO-02', what: text }); return { level: 'red', appended: true }; }
+    const al = createAlert(p.id, 'red', text, null); al.rule = 'R-CHEMO-02 CTCAE'; al.log[0].who = '護理端 App・' + by; al.log[0].what = '到府 CTCAE 評分觸發紅色事件：' + text; return { level: 'red', alert: al };
+  }
+  if (mid.length && !open.length) { const al = createAlert(p.id, 'yellow', 'CTCAE ' + mid.map(([a]) => a + ' Grade 2').join('、') + '（R-CHEMO-02：中度，30 分鐘內承接）', null); al.rule = 'R-CHEMO-02 CTCAE'; al.log[0].who = '護理端 App・' + by; return { level: 'yellow', alert: al }; }
+  return null;
+}
+/* DART 草稿（D 資料／A 處置／R 反應／T 衛教）——依表單內容與口述產生；正式版由 AIRIC「取得報告」回傳 */
+const DART_T = {
+  CHEMO: '衛教口腔清潔與進食、腹瀉補充水分；體溫 38 度以上或發冷發抖立即聯絡戰情室或請立刻直接撥打 119。',
+  SSTI: '衛教傷口觀察（紅腫超出標記線、疼痛加劇）與抬高患肢；發燒或紅腫擴大立即聯絡戰情室，呼吸困難或意識改變請立刻直接撥打 119。',
+  PNA: '衛教呼吸觀察與氧療使用、拍痰與下床活動；呼吸變喘、嘴唇發紫、血氧低於目標請立刻直接撥打 119。',
+  UTI: '衛教水分攝取與排尿觀察；發燒、意識變化或尿量明顯變少立即聯絡戰情室，意識不清請立刻直接撥打 119。',
+  HF: '衛教每日晨起體重、限水限鹽與用藥；體重兩天增加 2 公斤或夜間喘醒立即聯絡戰情室，嚴重喘請立刻直接撥打 119。',
+};
+function dartBox() {
+  return '<div id="rn-dart" hidden><div class="faint" style="font-size:15px;margin:8px 0 2px">護理紀錄草稿（DART，載入住院護理系統焦點紀錄前請核對）</div><div class="dart">' +
+    [['D', 'dartD', '資料：生命徵象與觀察'], ['A', 'dartA', '處置：執行項目與回傳戰情室'], ['R', 'dartR', '反應：病人／照顧者反應與回述'], ['T', 'dartT', '衛教內容']].map(([k, nm, ph]) => '<b>' + k + '</b><textarea name="' + nm + '" rows="2" placeholder="' + ph + '"></textarea>').join('') + '</div></div>';
+}
+function dartDraft(f, p, j, voice) {
+  const v = (k) => f.elements[k] ? f.elements[k].value : '';
+  const notes = (v('note') || '').split('；').filter(Boolean);
+  const D = '到府訪視。生命徵象 BP ' + v('sbp') + '/' + v('dbp') + '、HR ' + v('hr') + '、SpO₂ ' + v('spo2') + '%、T ' + v('temp') + '、RR ' + v('rr') + (parseFloat(v('o2')) ? '、O₂ ' + v('o2') + ' L/min' : '') + (f.elements.conscious ? '、意識' + f.elements.conscious.value : '') + (notes.length ? '；' + notes.join('、') : '') + (v('wound') ? '；傷口 ' + v('wound') : '') + '。';
+  const tasks = [...f.querySelectorAll('input[name=task]:checked')].map((c) => j.tasks[parseInt(c.value)]);
+  const A = (tasks.length ? tasks.join('、') : '生命徵象量測') + '；量測與觀察回傳戰情室，由規則引擎比對 B0 與個別目標' + (f.elements.pu && f.elements.pu.value ? '；壓傷評估 ' + f.elements.pu.value : '') + '。';
+  const R = (f.elements.teach && f.elements.teach.checked ? '病人／照顧者回述正確，可了解' : '病人／照顧者可了解') + (/家屬.*(會|能).*(血氧|操作)/.test(voice) ? '；家屬能操作血氧機' : '') + '。';
+  const T = DART_T[p.pathway] || '衛教依個別目標量測與回報；危險症狀請立刻直接撥打 119。';
+  return { D, A, R, T };
+}
+function a1AfterParse(f) {
+  const j = state.dispatch.find((x) => x.id === f.dataset.j); const p = j && P(j.pid); if (!p) return;
+  const voice = f.elements.voice ? f.elements.voice.value : '';
+  const d = dartDraft(f, p, j, voice); const box = document.getElementById('rn-dart');
+  if (box) { box.hidden = false; ['D', 'A', 'R', 'T'].forEach((k) => { const el = f.elements['dart' + k]; if (el) { el.value = d[k]; el.classList.add('ai-fill'); } }); }
+  const nCt = p.pathway === 'CHEMO' ? ctcaeFromText(f, voice) : 0;
+  const msg = document.getElementById('rn-voice-msg');
+  if (msg) msg.innerHTML = '語音辨識完成；' + msg.innerHTML.replace(/^草稿已填入/, '草稿已填入') + '；DART 四欄草稿已產生' + (nCt ? '；CTCAE 草稿 ' + nCt + ' 項' : '');
+}
+/* 送出到府紀錄時：DART、CTCAE 評分、壓傷換藥方式與起始日一併入紀錄；CTCAE 進 R-CHEMO-02 */
+function a1OnSubmit(form, p, j) {
+  const by = STAFF[state.rn.nurse].name; const notes = [];
+  const dart = { D: form.elements.dartD ? form.elements.dartD.value.trim() : '', A: form.elements.dartA ? form.elements.dartA.value.trim() : '', R: form.elements.dartR ? form.elements.dartR.value.trim() : '', T: form.elements.dartT ? form.elements.dartT.value.trim() : '' };
+  if (dart.D || dart.A || dart.R || dart.T) { j.record.dart = dart; notes.push('DART 草稿已核對（正式版寫入住院護理系統）'); }
+  if (p.pu && form.elements.pu && form.elements.pu.value) { p.pu.dressing = form.elements.puDress ? form.elements.puDress.value : ''; p.pu.start = form.elements.puStart ? form.elements.puStart.value : ''; }
+  const grades = p.pathway === 'CHEMO' ? ctcaeCollect(form) : null;
+  if (grades) {
+    p.ctcae = { t: state.now, by, grades, drugs: ctcaeDrugs(p) }; j.record.ctcae = grades;
+    const nz = Object.entries(grades).filter(([, g]) => g > 0);
+    notes.push('CTCAE ' + (nz.length ? nz.map(([a, g]) => a + ' G' + g).join('、') : '全部 Grade 0'));
+    const r = ctcaeRules(p, grades, by);
+    if (r) window.__a1Note = 'CTCAE 評分觸發' + (r.level === 'red' ? '紅色' : '黃色') + '警示（R-CHEMO-02）' + (r.appended ? '，已併入現有紅色事件' : '，戰情室已分派');
+  }
+  return notes.length ? '；' + notes.join('；') : '';
+}
+/* 個案卡：最近一次 CTCAE 非零項目（醫師端、戰情室共用） */
+function ctcaeCaseSection(p) {
+  if (!p.ctcae) return '';
+  const nz = Object.entries(p.ctcae.grades).filter(([, g]) => g > 0).sort((a, b) => b[1] - a[1]);
+  return '<div class="sec"><h4>化療副作用（CTCAE，A1）</h4><div class="note">' + fmtT(p.ctcae.t) + '・' + esc(p.ctcae.by) + '・處方 ' + esc((p.ctcae.drugs || []).join('、') || '—') + '：' + (nz.length ? nz.map(([a, g]) => '<b>' + esc(a) + ' Grade ' + g + '</b>').join('、') : '全部 Grade 0') + '；Grade ≥3 紅燈、Grade 2 黃燈（R-CHEMO-02）</div></div>';
+}
 
 /* ===================== 渲染與事件 ===================== */
 let drawerPid = null;
@@ -5087,6 +5205,13 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
   .geo-pin.flash-red .geo-tag{background-color:#6e1a22;border-color:#ff5c5c}
   .geo-row.flash-red{background-color:#5a1820;box-shadow:inset 0 0 0 2px #ff5c5c}
 }
+
+/* A1 對齊 AIRIC：CTCAE 清單、DART 草稿 */
+.ctcae{display:flex;flex-direction:column}
+.ctcae-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.ctcae-ae{font-size:16px;font-weight:600}.ctcae-ae small{display:block;font-weight:400;color:var(--ink-3);font-size:13px}.ctcae-ae i{font-style:normal;color:var(--accent);cursor:help;font-weight:400}
+.ctcae-g{display:flex;gap:2px;flex-wrap:nowrap}.ctcae-g label{display:inline-flex;align-items:center;gap:1px;font-size:15px;padding:2px 3px;border-radius:6px;cursor:pointer;border:1px solid transparent}.ctcae-g input{margin:0 1px 0 0}
+.dart{display:grid;grid-template-columns:26px 1fr;gap:6px 8px;margin-top:4px}.dart b{font-size:18px;color:var(--accent-ink);padding-top:6px}.dart textarea{width:100%;min-height:60px;box-sizing:border-box}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -5104,7 +5229,7 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793756441540') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793770906917') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
