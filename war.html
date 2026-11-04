@@ -3519,7 +3519,7 @@ function renderWar() {
   h += '<div class="card"><div class="card-h"><h3>交班與報表</h3></div><div class="card-b btn-row"><button class="btn sm" data-open="handoff">交班摘要</button><button class="btn sm" data-open="daily">營運日報</button><button class="btn sm" data-open="quality">品質指標</button><button class="btn sm" data-open="rules">警示規則表</button><button class="btn sm" data-video-set="1">視訊設定</button></div></div>';
   h += '<div class="card" id="meet-card"><div class="card-h"><h3>視訊會議</h3><span class="sub">每位病人一場獨立的 Teams 會議</span></div><div class="card-b">' + meetPanel() + '</div></div>';
   h += '<div class="card" id="call-card"><div class="card-h"><h3>視訊邀請</h3><span class="sub">醫護邀請病人・病人來電先接戰情室，5 分鐘未接通轉醫師</span></div><div class="card-b">' + callsPanel() + '</div></div>';
-  h += '<div class="card" id="dev-card"><div class="card-h"><h3>裝置同步</h3><span class="sub">五個網址各自登入・後端同一張試算表・5 秒內同步</span></div><div class="card-b">' + devicesPanel() + '</div></div>';
+  h += '<div class="card" id="dev-card"><div class="card-h"><h3>裝置同步</h3><span class="sub">五個網址各自登入・後端同一張試算表・操作中 1.5 秒同步' + buildStamp() + '</span></div><div class="card-b">' + devicesPanel() + '</div></div>';
   h += '<div class="card" id="ptlink-card"><div class="card-h"><h3>病人連結（院外使用）</h3><span class="sub">每床一個連結・不需 Claude 帳號</span></div><div class="card-b">' + patientLinksPanel() + '</div></div>';
   h += '</div></div>';
   return h;
@@ -3881,7 +3881,7 @@ function submitVisit(form, submitter) {
   if (j.first) { p.transitionChecks = p.transitionChecks || {}; p.transitionChecks.tech = true; }
   if (form.elements.teach.checked) { p.transitionChecks = p.transitionChecks || {}; p.transitionChecks.edu = p.transitionChecks.edu || !!state.edu[p.id]; decide(p.id, '衛教', '到府回述確認完成（' + STAFF[state.rn.nurse].name + '）', STAFF[state.rn.nurse].name); }
   decide(p.id, finish ? '到府訪視' : '到府紀錄更新', (finish ? '完成：' : '更新（第 ' + j.records.length + ' 次）：') + doneTasks.join('、') + (wound ? '；傷口 ' + wound : '') + puNote + (voiceTxt ? '；語音紀錄→結構化草稿，護理師核對後送出' : '') + a1Note + (form.elements.note.value ? '；' + form.elements.note.value : ''), STAFF[state.rn.nurse].name);
-  save(); state.rn.editRec = null; state.rn.screen = finish ? 'route' : 'job'; render();
+  save(); state.rn.editRec = finish ? null : j.id; state.rn.screen = finish ? 'route' : 'job'; render(); if (!finish) prefillRecord(j.id); /* 停留中：表單留在畫面上，可以一直改、一直送 */
   const a1t = window.__a1Note || ''; window.__a1Note = ''; toast((r.created ? '紀錄已送出；量測觸發' + (r.created.level === 'red' ? '紅色' : '黃色') + '警示，戰情室已分派' : (finish ? '紀錄已送出並完成打卡' : '紀錄已更新（第 ' + j.records.length + ' 次）' + (j.status >= 3 ? '' : '，仍在案家')) + '；量測符合個別目標') + (a1t ? '；' + a1t : ''), a1t ? 7000 : undefined);
 }
 /* ===================== FHIR 匯出：TW LTC IG v1.1 在宅急症（HaH）結案／轉銜摘要 document Bundle =====================
@@ -4059,6 +4059,8 @@ const ENTRY_LINKS = {
 };
 const ENTRY_SUB = { war: '帳號 W001', doc: '員工編號登入', pt: '床號登入（V01–V08）', rn: '員工編號登入' };
 const roleNow = () => (typeof ROLE === 'string' && ROLE) ? ROLE : 'war';
+/* 頁面版本（建置時間，台北）：核對各裝置是否都在最新版 */
+function buildStamp() { const b = window.__appBuild; if (!b) return ''; const d = new Date(b + 8 * 3600000); const p = (n) => String(n).padStart(2, '0'); return '・版本 ' + p(d.getUTCMonth() + 1) + '/' + p(d.getUTCDate()) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()); }
 const PUBLIC_BASE = 'https://glennxxx2002-cloud.github.io/aikeso-home/'; /* 院外（GitHub Pages，不需 Claude 帳號） */
 const PUBLIC_LINKS = { war: PUBLIC_BASE + 'war.html', pt: PUBLIC_BASE + 'pt.html', doc: PUBLIC_BASE + 'doc.html', rn: PUBLIC_BASE + 'rn.html' };
 const PT_PUBLIC_URL_BAKED = PUBLIC_LINKS.pt; /* 院外病人端公開網址 */
@@ -5231,7 +5233,7 @@ table.t tbody tr.row.fresh td:nth-child(4)::after{content:"剛更新";position:a
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793774454120') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793776036301') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
@@ -5470,6 +5472,7 @@ table.t tbody tr.row.fresh td:nth-child(4)::after{content:"剛更新";position:a
     const go = document.getElementById('upd-go'); if (go) go.addEventListener('click', reload);
   }
   window.__newerBuild = newerBuild; window.__appBuild = APP_BUILD;
+  try { const w = document.getElementById('sync-wrap'); if (w && typeof buildStamp === 'function') w.title = '同步狀態' + buildStamp(); } catch (e) { }
   function stopAll() { clearTimeout(pollTimer); clearInterval(hbInterval); pollTimer = null; hbInterval = null; stopped = true; }
   function schedulePoll() { clearTimeout(pollTimer); pollTimer = setTimeout(async () => { if (stopped) return; if (document.visibilityState === 'visible') { window.__syncStats.polls++; await refreshNow('定時刷新'); } schedulePoll(); }, Date.now() < fastUntil ? FAST_MS : POLL_MS); }
   async function start(skipApi) {
