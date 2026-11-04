@@ -3800,8 +3800,8 @@ function renderRn() {
       body = '<div class="pcard"><h3>到府紀錄</h3>' + (avail.length ? '<div class="note" style="margin-bottom:8px">選擇已到達的案家開始填寫：</div>' + avail.map((x) => '<button class="drow" data-act="job-open" data-j="' + x.id + '"><div>' + jobBadge(x) + '</div><div><div class="nm">' + esc(P(x.pid).name) + '</div><div class="d">' + x.time + '・' + esc(x.area) + '</div></div><div class="r">›</div></button>').join('') : '<div class="empty">尚無已到達的案家。請先在「派工」完成出發與到達打卡。</div>') + '</div>';
     } else {
       const p = P(j.pid); const m = latest(p); const rec = j.record;
-      if (rec) {
-        body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・已完成 ' + fmtT(rec.t) + '</span></h3><dl class="kv"><dt>生命徵象</dt><dd class="num">BP ' + rec.m.sbp + '/' + rec.m.dbp + '、HR ' + rec.m.hr + '、RR ' + rec.m.rr + '、SpO₂ ' + rec.m.spo2 + '%、T ' + rec.m.temp.toFixed(1) + (rec.m.weight ? '、體重 ' + rec.m.weight : '') + '</dd><dt>執行</dt><dd>' + rec.done.map(esc).join('、') + '</dd>' + (rec.wound ? '<dt>傷口</dt><dd>' + esc(rec.wound) + '</dd>' : '') + (rec.dart ? '<dt>DART</dt><dd>D：' + esc(rec.dart.D) + '<br>A：' + esc(rec.dart.A) + '<br>R：' + esc(rec.dart.R) + '<br>T：' + esc(rec.dart.T) + '</dd>' : '') + (rec.ctcae ? '<dt>CTCAE</dt><dd>' + (Object.entries(rec.ctcae).filter(([, g]) => g > 0).map(([a, g]) => esc(a) + ' Grade ' + g).join('、') || '全部 Grade 0') + '</dd>' : '') + (rec.pu ? '<dt>壓傷</dt><dd>' + esc(rec.pu.stage) + (rec.pu.dressing ? '・' + esc(rec.pu.dressing) + (rec.pu.start ? '・起始 ' + esc(rec.pu.start) : '') : '') + '</dd>' : '') + '<dt>備註</dt><dd>' + esc(rec.note || '—') + '</dd><dt>簽名</dt><dd>' + (rec.signed ? '病人／照顧者已簽名' : '未簽名') + '</dd></dl><div class="btn-row" style="margin-top:8px"><button class="btn sm" data-rn="route">回派工清單</button></div></div>';
+      if (rec && s.editRec !== j.id) {
+        body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + (j.status >= 3 ? '・已完成 ' : '・停留中・最近更新 ') + fmtT(rec.t) + '</span></h3><dl class="kv"><dt>生命徵象</dt><dd class="num">BP ' + rec.m.sbp + '/' + rec.m.dbp + '、HR ' + rec.m.hr + '、RR ' + rec.m.rr + '、SpO₂ ' + rec.m.spo2 + '%、T ' + rec.m.temp.toFixed(1) + (rec.m.weight ? '、體重 ' + rec.m.weight : '') + '</dd><dt>執行</dt><dd>' + rec.done.map(esc).join('、') + '</dd>' + (rec.wound ? '<dt>傷口</dt><dd>' + esc(rec.wound) + '</dd>' : '') + (rec.dart ? '<dt>DART</dt><dd>D：' + esc(rec.dart.D) + '<br>A：' + esc(rec.dart.A) + '<br>R：' + esc(rec.dart.R) + '<br>T：' + esc(rec.dart.T) + '</dd>' : '') + (rec.ctcae ? '<dt>CTCAE</dt><dd>' + (Object.entries(rec.ctcae).filter(([, g]) => g > 0).map(([a, g]) => esc(a) + ' Grade ' + g).join('、') || '全部 Grade 0') + '</dd>' : '') + (rec.pu ? '<dt>壓傷</dt><dd>' + esc(rec.pu.stage) + (rec.pu.dressing ? '・' + esc(rec.pu.dressing) + (rec.pu.start ? '・起始 ' + esc(rec.pu.start) : '') : '') + '</dd>' : '') + '<dt>備註</dt><dd>' + esc(rec.note || '—') + '</dd><dt>簽名</dt><dd>' + (rec.signed ? '病人／照顧者已簽名' : '未簽名') + '</dd>' + recordHistoryHtml(j) + '</dl><div class="btn-row" style="margin-top:8px">' + recordButtons(j) + '</div></div>';
       } else {
         body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・' + j.time + '</span></h3><form id="rn-form" data-j="' + j.id + '">' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin-bottom:8px"><input type="checkbox" name="idc" required> 身分確認（雙重辨識）</label>' +
@@ -3817,7 +3817,7 @@ function renderRn() {
           '<div class="field" style="margin-top:10px"><span>觀察與備註</span><textarea name="note" rows="2" placeholder="例：攝食約半碗，尿量 300 ml；家屬能正確操作血氧機"></textarea></div>' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin:8px 0"><input type="checkbox" name="teach"> 衛教回述確認（病人／照顧者用自己的話說一次）</label>' +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin:8px 0"><input type="checkbox" name="signed"> 病人／照顧者電子簽名</label>' +
-          '<div class="btn-row" style="margin-top:8px"><button class="btn primary" type="submit">送出紀錄並完成打卡</button><button class="btn" type="button" data-rn="route">返回</button></div></form>' +
+          '<div class="btn-row" style="margin-top:8px">' + (j.status >= 3 ? '<button class="btn primary" type="submit" data-finish="0">送出更新</button>' : '<button class="btn primary" type="submit" data-finish="1">送出紀錄並完成打卡</button><button class="btn" type="submit" data-finish="0">送出更新（繼續停留）</button>') + '<button class="btn" type="button" data-rn="route">返回</button></div></form>' +
           '<div class="note" style="margin-top:8px">量測送出後進入共用資料層，由規則引擎比對 B0 與個別目標；異常時戰情室即時分派，不需另行回報。</div></div>';
       }
     }
@@ -3837,7 +3837,9 @@ function renderRn() {
 function handleRnAction(btn) {
   const act = btn.dataset.act;
   if (act === 'job-step') { const j = state.dispatch.find((x) => x.id === btn.dataset.j); jobStep(j, state.rn.nurse); toast(P(j.pid).name + '：' + JOB_ST[j.status] + '打卡 ' + fmtT(state.now)); if (j.status === 2) { state.rn.job = j.id; state.rn.screen = 'job'; } render(); }
-  if (act === 'job-open') { state.rn.job = btn.dataset.j; state.rn.screen = 'job'; render(); }
+  if (act === 'job-open') { state.rn.job = btn.dataset.j; state.rn.editRec = null; state.rn.screen = 'job'; render(); }
+  if (act === 'rn-rec-edit') { state.rn.job = btn.dataset.j; state.rn.editRec = btn.dataset.j; state.rn.screen = 'job'; render(); prefillRecord(btn.dataset.j); return; }
+  if (act === 'rn-rec-finish') { const j = state.dispatch.find((x) => x.id === btn.dataset.j); if (!j) return; now(); jobStep(j, state.rn.nurse); decide(j.pid, '到府訪視', '完成打卡（' + STAFF[state.rn.nurse].name + '）；紀錄共更新 ' + ((j.records || []).length) + ' 次', STAFF[state.rn.nurse].name); save(); state.rn.screen = 'route'; render(); toast('已完成打卡'); return; }
   if (act === 'rn-voice') { voiceStart(); }
   if (act === 'rn-voice-demo') { const f = document.getElementById('rn-form'); const j = state.dispatch.find((x) => x.id === f.dataset.j); const p = P(j.pid); f.elements.voice.value = voiceDemoText(p); document.getElementById('rn-voice-msg').textContent = '已填入示範語句，按「產生結構化草稿」'; }
   if (act === 'rn-voice-parse') { const f = document.getElementById('rn-form'); voiceParse(f); a1AfterParse(f); }
@@ -3854,7 +3856,8 @@ function voiceStart() { const SR = window.SpeechRecognition || window.webkitSpee
 function cnNum(s) { const D = { '零': 0, '一': 1, '二': 2, '兩': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 }; s = String(s).trim(); if (/^[\d.]+$/.test(s)) return parseFloat(s); let n = 0, cur = 0, dec = null; for (const ch of s) { if (ch === '點') { dec = ''; continue; } if (dec !== null) { if (D[ch] !== undefined) dec += D[ch]; continue; } if (ch === '百') { n += (cur || 1) * 100; cur = 0; } else if (ch === '十') { n += (cur || 1) * 10; cur = 0; } else if (D[ch] !== undefined) cur = D[ch]; } n += cur; return parseFloat(n + (dec !== null && dec !== '' ? '.' + dec : '')); }
 function voiceParse(f) { const t = f.elements.voice.value; const msg = document.getElementById('rn-voice-msg'); if (!t.trim()) { msg.textContent = '沒有語音內容'; return; } const N = '([\\d.]+|[零一二兩三四五六七八九十百點]+)'; const grab = (re) => { const x = t.match(re); return x ? cnNum(x[1]) : null; }; const set = (k, v) => { if (v == null || isNaN(v) || !f.elements[k]) return false; f.elements[k].value = v; f.elements[k].classList.add('ai-fill'); return true; }; let n = 0; const bp = t.match(new RegExp('血壓\\s*' + N + '\\s*[／/，, ]\\s*' + N)); if (bp) { if (set('sbp', cnNum(bp[1]))) n++; if (set('dbp', cnNum(bp[2]))) n++; } if (set('hr', grab(new RegExp('心跳\\s*' + N)))) n++; if (set('spo2', grab(new RegExp('血氧\\s*' + N)))) n++; if (set('temp', grab(new RegExp('體溫\\s*' + N)))) n++; if (set('rr', grab(new RegExp('呼吸\\s*' + N)))) n++; if (set('o2', grab(new RegExp('氧氣\\s*' + N)))) n++; const notes = []; if (/抗生素.*(打完|已給|給完)/.test(t)) notes.push('IV 抗生素已給'); if (/口腔.*(破|潰瘍)/.test(t)) notes.push('口腔破皮'); if (/吃得少|吃不下/.test(t)) notes.push('攝食減少'); if (/拉了?([零一二兩三四五六七八九十\d]+)次/.test(t)) notes.push('腹瀉 ' + cnNum(t.match(/拉了?([零一二兩三四五六七八九十\d]+)次/)[1]) + ' 次'); if (/沒有出血|無出血/.test(t)) notes.push('無出血'); if (/沒有超出標記線|未超出標記線/.test(t)) { notes.push('紅腫未超出標記線'); if (f.elements.wound) { f.elements.wound.value = '未超出標記線；無波動感'; f.elements.wound.classList.add('ai-fill'); } } if (/沒有波動感|無波動感/.test(t)) notes.push('無波動感'); if (/家屬.*(會|能).*(血氧|操作)/.test(t)) notes.push('家屬能操作血氧機'); if (/用自己的話|回述/.test(t) && f.elements.teach) { f.elements.teach.checked = true; notes.push('回述確認'); } if (notes.length && f.elements.note) { f.elements.note.value = notes.join('；'); f.elements.note.classList.add('ai-fill'); } f.dataset.aiFilled = '1'; msg.innerHTML = '草稿已填入 <b>' + n + '</b> 個量測欄位' + (notes.length ? '與備註（' + notes.length + ' 項）' : '') + '，黃底為 AI 填入——請逐欄核對後送出；送出紀錄會註明「語音→草稿→護理師核對」'; }
 function puDraft(p) { const seq = ['無壓傷', 'Stage 1', 'Stage 2', 'Stage 3']; let stage; if (!p.pu) stage = p.barthel != null && p.barthel < 40 ? 'Stage 1' : '無壓傷'; else { const i = seq.indexOf(p.pu.stage); stage = (p.id.endsWith('6') || p.id.endsWith('0')) && i >= 0 && i < 3 ? seq[i + 1] : p.pu.stage; } return { stage, conf: stage === '無壓傷' ? 0.9 : 0.82, size: stage === '無壓傷' ? '未見壓傷' : '3×2 cm', site: '薦骨', t: state.now }; }
-function submitVisit(form) {
+function submitVisit(form, submitter) {
+  const finish = !(submitter && submitter.dataset.finish === '0'); /* 「送出更新」不完成打卡 */
   const j = state.dispatch.find((x) => x.id === form.dataset.j); const p = P(j.pid);
   const g = (k) => form.elements[k] ? parseFloat(form.elements[k].value) : undefined;
   const m = mk({ sbp: g('sbp'), dbp: g('dbp'), hr: g('hr'), spo2: g('spo2'), temp: g('temp'), rr: g('rr'), o2: g('o2') || 0, conscious: form.elements.conscious ? form.elements.conscious.value : '清醒', source: '護理到府（' + STAFF[state.rn.nurse].name + '）' });
@@ -3872,13 +3875,14 @@ function submitVisit(form) {
   const voiceTxt = form.elements.voice ? form.elements.voice.value.trim() : '';
   const r = addMeasurement(p.id, m, '護理到府');
   j.record = { t: state.now, m, done: doneTasks, wound, note: form.elements.note.value, signed: form.elements.signed.checked, teach: form.elements.teach.checked, voice: voiceTxt || null, aiFilled: form.dataset.aiFilled === '1', pu: p.pu && form.elements.pu && form.elements.pu.value ? p.pu : null };
+  j.records = (j.records || []).concat([{ t: j.record.t, m: { sbp: m.sbp, dbp: m.dbp, hr: m.hr, spo2: m.spo2, temp: m.temp, rr: m.rr } }]);
   const a1Note = a1OnSubmit(form, p, j);
-  jobStep(j, state.rn.nurse);
+  if (finish) jobStep(j, state.rn.nurse); else j.log.push({ t: state.now, what: j.status >= 3 ? '紀錄更新' : '紀錄更新（停留中）' });
   if (j.first) { p.transitionChecks = p.transitionChecks || {}; p.transitionChecks.tech = true; }
   if (form.elements.teach.checked) { p.transitionChecks = p.transitionChecks || {}; p.transitionChecks.edu = p.transitionChecks.edu || !!state.edu[p.id]; decide(p.id, '衛教', '到府回述確認完成（' + STAFF[state.rn.nurse].name + '）', STAFF[state.rn.nurse].name); }
-  decide(p.id, '到府訪視', '完成：' + doneTasks.join('、') + (wound ? '；傷口 ' + wound : '') + puNote + (voiceTxt ? '；語音紀錄→結構化草稿，護理師核對後送出' : '') + a1Note + (form.elements.note.value ? '；' + form.elements.note.value : ''), STAFF[state.rn.nurse].name);
-  save(); state.rn.screen = 'route'; render();
-  const a1t = window.__a1Note || ''; window.__a1Note = ''; toast((r.created ? '紀錄已送出；量測觸發' + (r.created.level === 'red' ? '紅色' : '黃色') + '警示，戰情室已分派' : '紀錄已送出並完成打卡；量測符合個別目標') + (a1t ? '；' + a1t : ''), a1t ? 7000 : undefined);
+  decide(p.id, finish ? '到府訪視' : '到府紀錄更新', (finish ? '完成：' : '更新（第 ' + j.records.length + ' 次）：') + doneTasks.join('、') + (wound ? '；傷口 ' + wound : '') + puNote + (voiceTxt ? '；語音紀錄→結構化草稿，護理師核對後送出' : '') + a1Note + (form.elements.note.value ? '；' + form.elements.note.value : ''), STAFF[state.rn.nurse].name);
+  save(); state.rn.editRec = null; state.rn.screen = finish ? 'route' : 'job'; render();
+  const a1t = window.__a1Note || ''; window.__a1Note = ''; toast((r.created ? '紀錄已送出；量測觸發' + (r.created.level === 'red' ? '紅色' : '黃色') + '警示，戰情室已分派' : (finish ? '紀錄已送出並完成打卡' : '紀錄已更新（第 ' + j.records.length + ' 次）' + (j.status >= 3 ? '' : '，仍在案家')) + '；量測符合個別目標') + (a1t ? '；' + a1t : ''), a1t ? 7000 : undefined);
 }
 /* ===================== FHIR 匯出：TW LTC IG v1.1 在宅急症（HaH）結案／轉銜摘要 document Bundle =====================
    結構依 http://ltc-ig.fhir.tw 的 HAHBundleSummary／HAHCompositionSummary 與相關 Profile 組成；
@@ -4500,6 +4504,34 @@ function ctcaeCaseSection(p) {
   return '<div class="sec"><h4>化療副作用（CTCAE，A1）</h4><div class="note">' + fmtT(p.ctcae.t) + '・' + esc(p.ctcae.by) + '・處方 ' + esc((p.ctcae.drugs || []).join('、') || '—') + '：' + (nz.length ? nz.map(([a, g]) => '<b>' + esc(a) + ' Grade ' + g + '</b>').join('、') : '全部 Grade 0') + '；Grade ≥3 紅燈、Grade 2 黃燈（R-CHEMO-02）</div></div>';
 }
 
+/* ===================== 到府紀錄持續更新 =====================
+   到府期間可多次送出：「送出更新（繼續停留）」存紀錄、重跑規則、同步到戰情室與醫師端，但不完成打卡；
+   「送出紀錄並完成打卡」才把派工標為完成。完成後仍可按「更新紀錄」補量測或補充內容。
+   每次送出都新增一筆量測（新的時間戳），j.records 保留歷次送出時間；j.record 永遠是最新一次。 */
+function recordHistoryHtml(j) {
+  const hist = j.records || []; if (!hist.length) return '';
+  return '<dt>更新</dt><dd>第 ' + hist.length + ' 次・' + hist.map((r) => fmtT(r.t).slice(-5)).join('、') + '</dd>';
+}
+function recordButtons(j) {
+  return '<button class="btn sm primary" data-act="rn-rec-edit" data-j="' + j.id + '">更新紀錄（再量一次／補充）</button>' +
+    (j.status < 3 ? '<button class="btn sm" data-act="rn-rec-finish" data-j="' + j.id + '">完成打卡</button>' : '') +
+    '<button class="btn sm" data-rn="route">回派工清單</button>';
+}
+/* 更新模式：把上一次紀錄填回表單（量測、備註、任務、簽名、語音、DART、CTCAE、壓傷） */
+function prefillRecord(jid) {
+  const f = document.getElementById('rn-form'); const j = state.dispatch.find((x) => x.id === jid); if (!f || !j || !j.record) return;
+  const rec = j.record; const p = P(j.pid); const set = (k, v) => { if (f.elements[k] && v != null && v !== '') f.elements[k].value = v; };
+  ['sbp', 'dbp', 'hr', 'spo2', 'rr', 'o2', 'weight'].forEach((k) => set(k, rec.m[k]));
+  if (rec.m.temp != null) set('temp', Number(rec.m.temp).toFixed(1));
+  if (f.elements.conscious && rec.m.conscious) f.elements.conscious.value = rec.m.conscious;
+  set('note', rec.note); set('wound', rec.wound); set('voice', rec.voice);
+  if (f.elements.idc) f.elements.idc.checked = true; if (f.elements.teach) f.elements.teach.checked = !!rec.teach; if (f.elements.signed) f.elements.signed.checked = !!rec.signed;
+  f.querySelectorAll('input[name=task]').forEach((c) => { c.checked = rec.done.includes(j.tasks[parseInt(c.value)]); });
+  if (rec.dart) { const box = document.getElementById('rn-dart'); if (box) box.hidden = false; ['D', 'A', 'R', 'T'].forEach((k) => set('dart' + k, rec.dart[k])); }
+  if (p.ctcae && p.ctcae.grades && typeof ctcaeSet === 'function') Object.entries(p.ctcae.grades).forEach(([ae, g]) => ctcaeSet(f, ae, g, false));
+  f.insertAdjacentHTML('afterbegin', '<div class="note" style="margin-bottom:8px"><b>更新模式</b>：已填回上一次紀錄（' + fmtT(rec.t) + '，第 ' + ((j.records || []).length) + ' 次）。改好後按「送出更新」，戰情室與醫師端數秒內同步；每次送出都新增一筆量測並重新判讀燈號。</div>');
+}
+
 /* ===================== 渲染與事件 ===================== */
 let drawerPid = null;
 function render() {
@@ -4655,7 +4687,7 @@ document.addEventListener('click', (e) => {
   if (t.dataset.open) { const c = modalContent(t.dataset.open); openModal(c.t, c.b); return; }
   if (t.dataset.doc) { state.doc.screen = t.dataset.doc; render(); return; }
   if (t.dataset.pt) { state.pt.screen = t.dataset.pt; render(); return; }
-  if (t.dataset.rn) { state.rn.screen = t.dataset.rn; render(); return; }
+  if (t.dataset.rn) { state.rn.screen = t.dataset.rn; state.rn.editRec = null; render(); return; }
   if (t.dataset.task !== undefined) { const arr = state.ptTasks[state.pt.pid]; if (arr) { arr[t.dataset.task].done = !arr[t.dataset.task].done; render(); } return; }
   if (t.dataset.choice !== undefined) { promptChoice._cb && promptChoice._cb(parseInt(t.dataset.choice)); return; }
   if (t.dataset.textok) { const v = document.getElementById('pt-text').value.trim(); if (!v) { toast('請填寫內容'); return; } closeModal(); promptText._cb && promptText._cb(v); return; }
@@ -4686,7 +4718,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('submit', (e) => {
   if (e.target.id === 'pt-form') { e.preventDefault(); submitMeasure(e.target); }
   if (e.target.id === 'pt-report') { e.preventDefault(); submitReport(e.target); }
-  if (e.target.id === 'rn-form') { e.preventDefault(); submitVisit(e.target); }
+  if (e.target.id === 'rn-form') { e.preventDefault(); submitVisit(e.target, e.submitter); }
 });
 document.addEventListener('change', (e) => {
   if (e.target.id === 'pt-sel') { state.pt.pid = e.target.value; state.pt.screen = 'today'; render(); }
@@ -5187,7 +5219,7 @@ table.t tbody tr.row.fresh td:nth-child(4)::after{content:"剛更新";position:a
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793772407108') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793773809302') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
