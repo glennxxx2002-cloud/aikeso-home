@@ -3113,6 +3113,8 @@ const PRI = { red: 0, yellow: 1, green: 2 };
 function alertFlash(a) { return a.level === 'red' && (a.status === 0 || (a.status < 4 && !!a.reflash)); }
 function redPending(pid) { return state.alerts.some((a) => a.pid === pid && alertFlash(a)); }
 const FLASH = (pid) => (redPending(pid) ? ' flash-red' : '');
+/* 2 分鐘內的新量測：戰情室清單的「最新量測」欄標「剛更新」 */
+const FRESH = (p) => { const m = latest(p); return (m && Date.now() - Date.parse(m.t) < 120000) ? ' fresh' : ''; };
 function priority(p) {
   const L = lightOf(p); const m = latest(p);
   return PRI[L.light] * 1000 - (L.dq ? 400 : 0) - Math.min(minsAgo(m.t), 600) / 10;
@@ -3512,7 +3514,7 @@ function renderWar() {
   let list = state.filter ? ps.filter((p) => p.pathway === state.filter) : ps;
   list = list.slice().sort((a, b) => priority(a) - priority(b));
   h += '<div class="card"><div class="card-h"><h3>病人優先處理清單</h3><span class="sub">依燈號、趨勢惡化、量測缺失與等待時間排序・閃爍＝紅色警示尚無人接手，或接手後又收到新的紅色數值' + (state.filter ? '・篩選：' + PATHWAYS[state.filter].name : '') + '</span><span class="spacer"></span>' + (state.filter ? '<button class="btn xs" data-path="">清除篩選</button>' : '') + '<span class="pill red" style="font-weight:500">紅 ' + reds + '</span><span class="pill yellow" style="font-weight:500">黃 ' + yels + '</span><span class="pill dq" style="font-weight:500">資料 ' + dqs + '</span></div><div class="scroll-x"><table class="t"><thead><tr><th>燈號</th><th>病人</th><th>路徑／Day</th><th>最新量測</th><th>判讀摘要</th><th>上傳</th><th>下一步</th><th>負責</th><th>詳情</th></tr></thead><tbody>' +
-    list.map((p) => { const L = lights[p.id], m = latest(p); const first = L.ev.reasons[0] ? L.ev.reasons[0].s : (L.dq ? L.ev.dqReasons[0] : '穩定，依計畫'); const opn = L.open[0]; return '<tr class="row' + FLASH(p.id) + '" data-p="' + p.id + '"><td>' + pill(L.light, L.light === 'red' ? '紅' : L.light === 'yellow' ? '黃' : '綠') + (L.dq ? ' ' + pill('dq', '資料') : '') + '</td><td>' + patientLink(p) + '<div class="faint num" style="font-size:15px">' + p.id + '・' + p.age + p.sex + (p.bed ? '・床 ' + p.bed : '') + '</div></td><td>' + PATHWAYS[p.pathway].short + '<div class="faint" style="font-size:15px">Day ' + p.day + '/' + p.plan + '</div></td><td class="num" style="font-size:16.5px">' + vitalsInline(p) + '</td><td style="font-size:17.5px;max-width:220px">' + esc(first) + (L.ev.reasons.length > 1 ? '<span class="faint">（+' + (L.ev.reasons.length - 1) + '）</span>' : '') + '</td><td class="num" style="font-size:16.5px;white-space:nowrap">' + agoText(m.t) + '</td><td style="font-size:16.5px;white-space:nowrap">' + (opn ? stBadge(opn) : '<span class="st">' + esc(p.round.replace(/^今日 /, '')) + '</span>') + '</td><td style="font-size:16.5px;white-space:nowrap">' + staff(p.md) + '<div class="faint" style="font-size:15px">' + staff(p.rn) + '</div></td><td><button class="btn sm primary" data-case="' + p.id + '">查看詳情</button></td></tr>'; }).join('') +
+    list.map((p) => { const L = lights[p.id], m = latest(p); const first = L.ev.reasons[0] ? L.ev.reasons[0].s : (L.dq ? L.ev.dqReasons[0] : '穩定，依計畫'); const opn = L.open[0]; return '<tr class="row' + FLASH(p.id) + FRESH(p) + '" data-p="' + p.id + '"><td>' + pill(L.light, L.light === 'red' ? '紅' : L.light === 'yellow' ? '黃' : '綠') + (L.dq ? ' ' + pill('dq', '資料') : '') + '</td><td>' + patientLink(p) + '<div class="faint num" style="font-size:15px">' + p.id + '・' + p.age + p.sex + (p.bed ? '・床 ' + p.bed : '') + '</div></td><td>' + PATHWAYS[p.pathway].short + '<div class="faint" style="font-size:15px">Day ' + p.day + '/' + p.plan + '</div></td><td class="num" style="font-size:16.5px">' + vitalsInline(p) + '</td><td style="font-size:17.5px;max-width:220px">' + esc(first) + (L.ev.reasons.length > 1 ? '<span class="faint">（+' + (L.ev.reasons.length - 1) + '）</span>' : '') + '</td><td class="num" style="font-size:16.5px;white-space:nowrap">' + agoText(m.t) + '</td><td style="font-size:16.5px;white-space:nowrap">' + (opn ? stBadge(opn) : '<span class="st">' + esc(p.round.replace(/^今日 /, '')) + '</span>') + '</td><td style="font-size:16.5px;white-space:nowrap">' + staff(p.md) + '<div class="faint" style="font-size:15px">' + staff(p.rn) + '</div></td><td><button class="btn sm primary" data-case="' + p.id + '">查看詳情</button></td></tr>'; }).join('') +
     '</tbody></table></div></div>';
   // 營運與資源
   h += '<div class="card"><div class="card-h"><h3>今日營運與資源調度</h3><span class="sub">' + taskDone + '/' + taskTotal + ' 已完成・下一批視訊查房 10:30・行動小組 A 可用／B 組出勤中</span></div><div class="card-b ops">' + state.tasks.map((t) => '<div class="op"><span>' + t.k + '</span><div class="bar"><i style="width:' + Math.round(t.done / t.total * 100) + '%"></i></div><span class="num">' + t.done + ' / ' + t.total + '</span></div>').join('') + '<div class="op"><span>Tech Pack 在線</span><div class="bar"><i style="width:' + Math.round(online / ps.length * 100) + '%"></i></div><span class="num">' + online + ' / ' + ps.length + '</span></div><div class="hr"></div><div class="legend"><span class="tag">08–09 交班</span><span class="tag">09–12 線上查房</span><span class="tag">13–17 實地訪視</span><span class="tag">18–08 on-call</span><span class="faint">一線：黃護理師（指揮中心）　二線：林醫師 on-call</span></div></div></div>';
@@ -5212,6 +5214,12 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
 .ctcae-ae{font-size:16px;font-weight:600}.ctcae-ae small{display:block;font-weight:400;color:var(--ink-3);font-size:13px}.ctcae-ae i{font-style:normal;color:var(--accent);cursor:help;font-weight:400}
 .ctcae-g{display:flex;gap:2px;flex-wrap:nowrap}.ctcae-g label{display:inline-flex;align-items:center;gap:1px;font-size:15px;padding:2px 3px;border-radius:6px;cursor:pointer;border:1px solid transparent}.ctcae-g input{margin:0 1px 0 0}
 .dart{display:grid;grid-template-columns:26px 1fr;gap:6px 8px;margin-top:4px}.dart b{font-size:18px;color:var(--accent-ink);padding-top:6px}.dart textarea{width:100%;min-height:60px;box-sizing:border-box}
+
+/* 戰情室清單：2 分鐘內的新量測 */
+@keyframes freshIn{0%{background-color:color-mix(in srgb,var(--green) 45%,transparent)}100%{background-color:color-mix(in srgb,var(--green) 12%,transparent)}}
+table.t tbody tr.row.fresh td:nth-child(4){position:relative;background-color:color-mix(in srgb,var(--green) 12%,transparent);box-shadow:inset 3px 0 0 var(--green);animation:freshIn 1.2s ease-out 2}
+table.t tbody tr.row.fresh td:nth-child(4)::after{content:"剛更新";position:absolute;right:6px;top:4px;font-size:12px;font-weight:700;color:var(--green);background:var(--surface);border:1px solid var(--green);border-radius:999px;padding:0 6px;line-height:16px}
+@media (max-width:760px){table.t tbody tr.row.fresh td:nth-child(4)::after{top:auto;bottom:4px}}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -5229,9 +5237,13 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1793770906917') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1793772407108') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
+  /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
+  const FAST_MS = Math.min((window.__SYNC_FAST_MS && window.__SYNC_FAST_MS > 300) ? window.__SYNC_FAST_MS : 1500, POLL_MS), FAST_WINDOW = 120000;
+  let fastUntil = 0; const goFast = () => { fastUntil = Date.now() + FAST_WINDOW; };
+  window.__syncFast = () => Date.now() < fastUntil;
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
   const UI_KEYS = ['tab', 'doc', 'pt', 'rn', 'filter', 'sort', 'now']; /* now 是每台裝置的真實時間，不同步；tOffset（+30 分）會同步 */
   const canon = (st) => { const o = {}; Object.keys(st).forEach((k) => { if (!UI_KEYS.includes(k)) o[k] = st[k]; }); return JSON.stringify(o); };
@@ -5323,6 +5335,20 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
     return { ver, at, by, who, key, build, json, devices };
   };
   const via = () => '（' + (T ? T.label : '') + '・';
+  /* 遠端狀態裡比本機多出來的量測（護理到府、病人端）：戰情室與醫師端以提示列出病人與數值，不必等人去翻清單 */
+  function newMeasurements(oldS, newS) {
+    const out = []; try {
+      const old = {}; (oldS.patients || []).forEach((p) => { old[p.id] = (p.ms || []).map((m) => m.t); });
+      (newS.patients || []).forEach((p) => { const seen = new Set(old[p.id] || []); (p.ms || []).forEach((m) => { if (!seen.has(m.t) && old[p.id]) out.push({ p, m }); }); });
+    } catch (e) { }
+    return out.filter((x) => Date.now() - Date.parse(x.m.t) < 10 * 60000);
+  }
+  function announceMeasurements(list) {
+    if (!list.length || typeof toast !== 'function' || !/^(war|doc)$/.test(roleNow())) return;
+    const one = (x) => { const m = x.m; return x.p.name + '（床 ' + (x.p.bed || '—') + '）新量測・' + (m.source || '') + '：BP ' + m.sbp + '/' + m.dbp + '、HR ' + m.hr + '、SpO₂ ' + m.spo2 + '%、T ' + (typeof m.temp === 'number' ? m.temp.toFixed(1) : m.temp) + (m.rr ? '、RR ' + m.rr : ''); };
+    toast('📈 ' + list.slice(-3).map(one).join('｜'), 7000);
+    window.__lastNewMs = list.map((x) => x.p.id);
+  }
   const applyRemote = (rm, src) => {
     const fresh = rm.devices.filter((d) => Date.now() - d.at < DEV_TTL);
     window.__devices = fresh.map((d) => ({ role: d.role, who: d.who, since: d.at, id: d.id, isMe: d.id === devId }));
@@ -5336,10 +5362,12 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
     let o = null; try { o = JSON.parse(rm.json); } catch (e) { setDot('err', '試算表內容無法解析（可能被手動編輯）'); return false; }
     if (!o || !o.patients) { setDot('err', '試算表內容不是 AiKESO 狀態'); return false; }
     UI_KEYS.forEach((k) => { o[k] = state[k]; });
-    lastSeen = rm.json; saveVer(rm.ver); state = o; if (typeof ensureBeds === 'function') ensureBeds(state.patients);
+    const newMs = newMeasurements(state, o);
+    lastSeen = rm.json; saveVer(rm.ver); goFast(); state = o; if (typeof ensureBeds === 'function') ensureBeds(state.patients);
     if (roleNow() === 'pt' && state.pt) { const me = window.__currentUser; if (me && P(me.who)) state.pt.pid = me.who; else if (!P(state.pt.pid)) { state.pt.pid = state.patients[0] ? state.patients[0].id : null; } }
     if (roleNow() === 'doc' && state.doc && state.doc.screen === 'case' && !P(state.doc.pid)) { state.doc.screen = 'list'; }
     saveLocal(); render(); window.__syncStats.applied++; log('applied v' + rm.ver + ' from ' + rm.by + ' (' + src + ')');
+    announceMeasurements(newMs);
     setDot('ok', '已同步 ' + hhmmss() + '（來自 ' + ((typeof ROLE_LABEL !== 'undefined' && ROLE_LABEL[rm.by]) || rm.by || '其他裝置') + (rm.who ? '・' + rm.who : '') + '・' + src + '・' + (T ? T.label : '') + '・v' + rm.ver + '）');
     return true;
   };
@@ -5416,13 +5444,13 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
     if (mine.length > COLS * CHUNK) { setDot('err', '狀態太大（' + Math.round(mine.length / 1024) + ' KB）無法寫入試算表，請按「重設」'); writing = false; return; }
     try {
       await T.write(RANGE_STATE, [[ver, Date.now(), roleNow(), whoNow(), (typeof STORE_KEY === 'string' ? STORE_KEY : ''), Math.max(APP_BUILD, window.__remoteBuild || 0)], chunks]);
-      lastSeen = mine; saveVer(ver); window.__syncStats.pushed++; log('wrote v' + ver + ' (' + mine.length + ' chars)'); setDot('ok', '已同步 ' + hhmmss() + '（已寫入・' + T.label + '・v' + ver + '）'); if (window.__syncPing) window.__syncPing();
+      lastSeen = mine; saveVer(ver); goFast(); window.__syncStats.pushed++; log('wrote v' + ver + ' (' + mine.length + ' chars)'); setDot('ok', '已同步 ' + hhmmss() + '（已寫入・' + T.label + '・v' + ver + '）'); if (window.__syncPing) window.__syncPing();
     } catch (e) { log('write failed ' + ((e && e.code) || e)); onErr(e, '寫入'); }
     writing = false; if (dirty) { dirty = false; flush(); }
   }
   /* 變更後 400 ms 內一定寫一次（不被連續的 save() 一直往後推） */
   let forcePending = false;
-  window.__syncPush = (force) => { if (force === true) forcePending = true; if (timer) return; timer = setTimeout(() => { timer = null; const f = forcePending; forcePending = false; flush(f); }, 400); };
+  window.__syncPush = (force) => { goFast(); if (force === true) forcePending = true; if (timer) return; timer = setTimeout(() => { timer = null; const f = forcePending; forcePending = false; flush(f); }, 400); };
   /* 線上裝置：每 30 秒把自己（裝置ID、端、登入者、時間）寫到第 5 列起的空列或自己的列 */
   let hbTimer = null;
   async function heartbeat() {
@@ -5448,7 +5476,8 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
     const go = document.getElementById('upd-go'); if (go) go.addEventListener('click', reload);
   }
   window.__newerBuild = newerBuild; window.__appBuild = APP_BUILD;
-  function stopAll() { clearInterval(pollTimer); clearInterval(hbInterval); pollTimer = null; hbInterval = null; stopped = true; }
+  function stopAll() { clearTimeout(pollTimer); clearInterval(hbInterval); pollTimer = null; hbInterval = null; stopped = true; }
+  function schedulePoll() { clearTimeout(pollTimer); pollTimer = setTimeout(async () => { if (stopped) return; if (document.visibilityState === 'visible') { window.__syncStats.polls++; await refreshNow('定時刷新'); } schedulePoll(); }, Date.now() < fastUntil ? FAST_MS : POLL_MS); }
   async function start(skipApi) {
     stopped = false; backoffUntil = 0;
     if (!apiUrl() && !hasClaude()) { T = null; setDot('off', '單機模式（沒有後端 API，也不在 claude.ai 內）'); return; }
@@ -5459,7 +5488,7 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
     /* 1) 首次讀取（連接器通道第一次會跳出「允許此頁使用 Google Sheets」） */
     refreshNow('首次連線').then(() => { heartbeat(); });
     /* 2) 固定輪詢（前景時）；回到前景立刻讀 */
-    pollTimer = setInterval(() => { if (document.visibilityState === 'visible') { window.__syncStats.polls++; refreshNow('定時刷新'); } }, POLL_MS);
+    stopped = false; schedulePoll();
     hbInterval = setInterval(heartbeat, HEARTBEAT_MS);
     /* 3) 同一個網址內的其他裝置：room 通知，秒級（只在 claude.ai 內有） */
     if (hasClaude() && !roomSet) {
@@ -5467,7 +5496,7 @@ table.t tbody tr.row.flash-red{animation:redFlashRow 1.4s ease-in-out infinite;a
       window.claude.use('room').then((room) => {
         if (!room) return;
         try {
-          room.on('sync', (m) => { if (m && m.sameTab) return; window.__syncStats.pings++; refreshNow('即時通知'); }, () => { });
+          room.on('sync', (m) => { if (m && m.sameTab) return; window.__syncStats.pings++; goFast(); refreshNow('即時通知'); }, () => { });
           window.__syncPing = () => { room.emit('sync', { at: Date.now(), by: roleNow() }).catch(() => { }); };
         } catch (e) { }
       }).catch(() => { });
