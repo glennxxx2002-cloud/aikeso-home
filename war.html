@@ -3610,7 +3610,7 @@ function handleDocAction(btn) {
   if (act === 'targets') { openTargets(pid); }
   if (act === 'targets-save') { const g = (k) => parseFloat(document.getElementById('tg-' + k).value); const t = p.targets; t.sbp = [g('sbp0'), g('sbp1')]; t.hr = [g('hr0'), g('hr1')]; t.spo2Min = Math.max(g('spo2'), (p.critical.spo2Min || 90) + 1); t.rrMax = g('rr'); t.tempMax = g('temp'); t.o2Max = g('o2'); t.glucoseMax = g('glu') || 300; p.b0Custom = document.getElementById('tg-custom').value || null; decide(pid, '個別目標', (p.b0Custom ? 'B0 醫師自設（' + p.b0Custom + '）：' : '調整個別目標：') + 'SBP ' + t.sbp.join('–') + '、HR ' + t.hr.join('–') + '、SpO₂ ≥' + t.spo2Min + '、RR ≤' + t.rrMax + '、T <' + t.tempMax + '、O₂ ≤' + t.o2Max, '林醫師'); save(); closeModal(); toast('個別目標已更新；規則引擎依新目標重新判讀'); render(); }
   if (act === 'targets-reset') { const o2 = p.targets.o2Max || 0; p.targets = { ...COMMON_TARGETS, o2Max: o2 }; if (p.pathway === 'HF') p.targets.dWt = 1.5; p.b0Custom = null; decide(pid, '個別目標', '回復共同預設（四路徑相同）', '林醫師'); save(); closeModal(); toast('已回復共同預設'); render(); }
-  if (act === 'order') { toast('開啟 HIS 醫囑（示範）：P1 循既有 HIS，App 內同步顯示'); decide(pid, '醫囑', '於 HIS 開立醫囑（示範）', '林醫師'); render(); }
+  if (act === 'order') { openOrderChoice(pid, '林醫師'); return; }
   if (act === 'close') { const L = lightOf(p); if (L.light !== 'green' || L.open.length || L.dq) { toast('尚不符合結案條件：須綠燈、無未解除警示、資料完整，並由醫師確認療程、症狀、功能與後續安排'); return; } promptText('結案確認（療程、症狀、功能、後續安排）', '例：療程 D7 完成，症狀緩解，功能回到基線；轉門診追蹤，結案後 30 天遠距追蹤', (v) => { closePatient(pid, v, 'md1'); toast(p.name + ' 已結案；進入結案後 30 天追蹤，警示與派工一併關閉'); render(); }); }
   if (act === 'assess') { openIntake(btn.dataset.c, btn.dataset.who || 'md1'); }
   if (act === 'intake-submit') { submitIntake(btn.dataset.c, btn.dataset.who || 'md1'); }
@@ -3781,9 +3781,9 @@ function jobCard(j, full) {
   const p = P(j.pid); if (!p) return '';
   const L = lightOf(p);
   return '<div class="pcard stripe ' + (jobLate(j) ? 'red' : L.light) + '" style="border-radius:8px"><div style="display:flex;gap:8px;align-items:center"><b class="num" style="font-size:20.5px">' + j.time + '</b><b>' + esc(p.name) + '</b><span class="faint" style="font-size:16.5px">' + PATHWAYS[p.pathway].short + ' D' + p.day + '・' + esc(j.area) + '</span><span style="margin-left:auto">' + jobBadge(j) + '</span></div>' +
-    '<div class="chip-row" style="margin-top:6px">' + j.tasks.map((t) => '<span class="tag' + (j.first ? ' acc' : '') + '">' + esc(t) + '</span>').join('') + '</div>' +
+    '<div class="chip-row" style="margin-top:6px">' + j.tasks.map((t) => '<span class="tag' + (j.first ? ' acc' : '') + '">' + esc(t) + '</span>').join('') + '</div>' + rnMedLine(p) +
     '<div class="faint num" style="font-size:16px;margin-top:5px">' + pill(L.light, L.light === 'red' ? '紅' : L.light === 'yellow' ? '黃' : '綠') + ' ' + (L.ev.reasons[0] ? esc(L.ev.reasons[0].s) : '穩定') + (j.log.length ? '・' + j.log.map((l) => l.what + ' ' + fmtT(l.t)).join('・') : '') + '</div>' +
-    '<div class="btn-row" style="margin-top:8px">' + (j.status === 0 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">出發打卡</button>' : j.status === 1 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">到達打卡</button>' : j.status === 2 ? '<button class="btn xs primary" data-act="job-open" data-j="' + j.id + '">填寫到府紀錄</button>' : '<button class="btn xs" data-act="job-open" data-j="' + j.id + '">查看紀錄</button>') + '' + joinBtn(p.id) + '<button class="btn xs" data-act="rn-video" data-p="' + p.id + '">視訊</button><button class="btn xs" data-act="case" data-p="' + p.id + '">個案卡</button><button class="btn xs" data-act="rpt-open" data-p="' + p.id + '">報告與影像</button><button class="btn xs" data-act="rn-nav" data-j="' + j.id + '">導航</button></div></div>';
+    '<div class="btn-row" style="margin-top:8px">' + (j.status === 0 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">出發打卡</button>' : j.status === 1 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">到達打卡</button>' : j.status === 2 ? '<button class="btn xs primary" data-act="job-open" data-j="' + j.id + '">填寫到府紀錄</button>' : '<button class="btn xs" data-act="job-open" data-j="' + j.id + '">查看紀錄</button>') + '' + joinBtn(p.id) + '<button class="btn xs" data-act="rn-video" data-p="' + p.id + '">視訊</button><button class="btn xs" data-act="case" data-p="' + p.id + '">個案卡</button><button class="btn xs" data-act="rpt-open" data-p="' + p.id + '">報告與影像</button><button class="btn xs" data-act="med-open" data-p="' + p.id + '">用藥與醫囑</button><button class="btn xs" data-act="rn-nav" data-j="' + j.id + '">導航</button></div></div>';
 }
 function renderRn() {
   const s = state.rn; const nurse = s.nurse; const jobs = jobsOf(nurse); const done = jobs.filter((j) => j.status === 3).length;
@@ -3804,7 +3804,7 @@ function renderRn() {
       if (rec && s.editRec !== j.id) {
         body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + (j.status >= 3 ? '・已完成 ' : '・停留中・最近更新 ') + fmtT(rec.t) + '</span></h3><dl class="kv"><dt>生命徵象</dt><dd class="num">BP ' + rec.m.sbp + '/' + rec.m.dbp + '、HR ' + rec.m.hr + '、RR ' + rec.m.rr + '、SpO₂ ' + rec.m.spo2 + '%、T ' + rec.m.temp.toFixed(1) + (rec.m.weight ? '、體重 ' + rec.m.weight : '') + '</dd><dt>執行</dt><dd>' + rec.done.map(esc).join('、') + '</dd>' + (rec.wound ? '<dt>傷口</dt><dd>' + esc(rec.wound) + '</dd>' : '') + (rec.dart ? '<dt>DART</dt><dd>D：' + esc(rec.dart.D) + '<br>A：' + esc(rec.dart.A) + '<br>R：' + esc(rec.dart.R) + '<br>T：' + esc(rec.dart.T) + '</dd>' : '') + (rec.ctcae ? '<dt>CTCAE</dt><dd>' + (Object.entries(rec.ctcae).filter(([, g]) => g > 0).map(([a, g]) => esc(a) + ' Grade ' + g).join('、') || '全部 Grade 0') + '</dd>' : '') + (rec.pu ? '<dt>壓傷</dt><dd>' + esc(rec.pu.stage) + (rec.pu.dressing ? '・' + esc(rec.pu.dressing) + (rec.pu.start ? '・起始 ' + esc(rec.pu.start) : '') : '') + '</dd>' : '') + '<dt>備註</dt><dd>' + esc(rec.note || '—') + '</dd><dt>簽名</dt><dd>' + (rec.signed ? '病人／照顧者已簽名' : '未簽名') + '</dd>' + recordHistoryHtml(j) + '</dl><div class="btn-row" style="margin-top:8px">' + recordButtons(j) + '</div></div>';
       } else {
-        body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・' + j.time + '</span></h3><form id="rn-form" data-j="' + j.id + '">' + rnReportsStrip(p) +
+        body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・' + j.time + '</span></h3><form id="rn-form" data-j="' + j.id + '">' + rnReportsStrip(p) + rnMedBox(p) +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin-bottom:8px"><input type="checkbox" name="idc" required> 身分確認（雙重辨識）</label>' +
           (A1_ENABLED ? '<div class="aibox" id="rn-voicebox"><div class="aibox-h">語音轉文字護理紀錄 <span class="faint">A1・AIRIC 語音辨識＋報告（DART）草稿，護理師核對後才送出</span></div><div class="faint" style="font-size:15px;margin-bottom:6px">AI Prompt：護理紀錄（DART）　錄音上限 60 分鐘　正式版接 AIRIC「取得語音辨識／取得報告」</div><textarea name="voice" rows="2" placeholder="按「語音輸入」口述，或按「示範語句」"></textarea><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-voice">🎤 語音輸入</button><button class="btn sm" type="button" data-act="rn-voice-demo">示範語句</button><button class="btn sm primary" type="button" data-act="rn-voice-parse">取得報告（結構化＋DART 草稿）</button></div><div class="faint" id="rn-voice-msg" style="font-size:15px;margin-top:4px"></div>' + dartBox() + '</div>' : '') +
           '<div class="field" style="margin-bottom:6px"><span><b>生命徵象</b>（同 B0 量測條件：' + esc(p.b0.note.split('，').slice(1).join('，') || '坐姿') + '）</span></div><div class="fgrid">' +
@@ -4531,6 +4531,7 @@ function recordButtons(j) {
   return '<button class="btn sm primary" data-act="rn-rec-edit" data-j="' + j.id + '">更新紀錄（再量一次／補充）</button>' +
     (j.status < 3 ? '<button class="btn sm" data-act="rn-rec-finish" data-j="' + j.id + '">完成打卡</button>' : '') +
     '<button class="btn sm" data-act="rpt-open" data-p="' + j.pid + '">檢查報告與影像</button>' +
+    '<button class="btn sm" data-act="med-open" data-p="' + j.pid + '">用藥與醫囑</button>' +
     '<button class="btn sm" data-rn="route">回派工清單</button>';
 }
 /* 更新模式：把上一次紀錄填回表單（量測、備註、任務、簽名、語音、DART、CTCAE、壓傷） */
@@ -4799,6 +4800,145 @@ document.addEventListener('click', (e) => {
   if (act === 'img-cmp') { openImage(pid, i, !rptView.cmp); return; }
   if (act === 'rpt-order') { const p = P(pid); if (!p) return; decide(pid, '醫囑', '安排追蹤 ' + b.dataset.what + '（HIS 醫囑・示範）', rptWho()); toast('已安排追蹤 ' + b.dataset.what + '（示範）；已寫入決策紀錄並同步'); render(); return; }
   if (act === 'img-note') { const p = P(pid); if (!p) return; const s = imagingStudies(p)[i]; const rn = rptIsNurse(); promptText((rn ? '護理觀察・' : '影像判讀／備註・') + (s ? s.title : ''), rn ? '例：與前次照片比較紅腫未超出標記線，無滲液；已衛教抬高患肢' : '例：與前次比較實質化縮小，維持目前抗生素；D7 再追蹤', (v) => { decide(pid, rn ? '護理觀察' : '影像判讀', (s ? '[' + s.title + '] ' : '') + v, rptWho()); toast((rn ? '護理觀察' : '判讀') + '已記錄到決策紀錄'); rptRerender(); }); return; }
+}, true);
+
+/* ===================== 用藥與重要醫囑（護理端到府派工） =====================
+   到府派工卡、到府紀錄表單、紀錄頁都看得到病人目前用藥與重要醫囑：
+   ・目前用藥：由個案治療欄位（p.tx）解析藥名、劑量、途徑、頻次、療程；IV 抗生素標出「本次到府給藥」或今日已給時間，其餘列下次給藥時間。
+   ・重要醫囑：監測頻率、通知醫師條件（危急界線）、氧療、路徑護理醫囑、治療備註、今日檢驗、醫師新開立的醫囑與個別目標調整。
+   ・醫師在醫師端「開立醫囑（HIS）」選常用醫囑或自填 → 護理端幾秒內出現「新醫囑」並跳提示；護理師按「確認已讀」寫入決策紀錄。
+   示範版：用藥由治療欄位解析、過敏為示範資料；正式版接 HIS 用藥與醫囑查詢 API（MedicationRequest、ServiceRequest）唯讀顯示。 */
+const MED_ALLERGY = { 'AK-016': 'Penicillin（皮疹）', 'AK-019': 'Aspirin（誘發氣喘）' };
+const MED_FREQ = { q24h: '每 24 小時', q12h: '每 12 小時', q8h: '每 8 小時', q6h: '每 6 小時', qd: '每日 1 次', bid: '每日 2 次', tid: '每日 3 次', qid: '每日 4 次', hs: '睡前', prn: '需要時' };
+const MED_SLOTS = { q12h: ['08:00', '20:00'], q8h: ['06:00', '14:00', '22:00'], q6h: ['06:00', '12:00', '18:00', '24:00'], qd: ['08:00'], bid: ['08:00', '20:00'], tid: ['08:00', '14:00', '20:00'], qid: ['08:00', '12:00', '16:00', '20:00'], hs: ['21:00'] };
+const MED_PRN = { Acetaminophen: '發燒 ≥38.0 或疼痛，間隔 ≥6 小時，每日 ≤4 g', '止吐藥': '噁心、嘔吐時' };
+const ORDER_TEMPLATES = {
+  PNA: ['O₂ 鼻導管 1–3 L/min，維持 SpO₂ ≥92%', '今日到府抽血 CBC／CRP（POCT）', '胸部 X 光追蹤（明日返院）', 'Ceftriaxone 續用至 D7，D5 評估轉口服'],
+  HF: ['Furosemide 加量為 60 mg bid（3 天後重評）', '限水 1,500 mL／日、低鈉飲食', '今日到府抽血 BNP／Cr／K', '每日晨起體重，48 小時增加 ≥1.5 kg 立即通知'],
+  UTI: ['依尿培養結果調整抗生素（藥敏報告出來後通知）', '每日飲水 ≥1,500 mL，記錄尿量', '今日到府抽血 CBC／CRP／Cr', '導尿管照護：每日清潔、引流袋低於膀胱'],
+  SSTI: ['抬高患肢，每日傷口照片對準標記線', '傷口換藥每日 1 次（生理食鹽水＋紗布）', '今日到府抽血 CBC／CRP', '紅腫超出標記線 2 cm 以上立即通知，評估改 IV 加強'],
+  CHEMO: ['體溫 ≥38.0 立即返院抽血 CBC／ANC', 'Ondansetron 8 mg PO q8h prn（噁心嘔吐）', '口腔照護：每 4 小時生理食鹽水漱口', '手足症候群 Grade 2 以上暫停 Capecitabine 並回診'],
+};
+function tpMin(iso) { const d = new Date(Date.parse(iso || state.now || new Date().toISOString()) + 8 * 3600e3); return d.getUTCHours() * 60 + d.getUTCMinutes(); }
+function hmMin(hm) { const m = /^(\d{1,2}):(\d{2})/.exec(hm || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+function isToday(iso) { return new Date(Date.parse(iso) + 8 * 3600e3).toISOString().slice(0, 10) === new Date(Date.parse(state.now || new Date().toISOString()) + 8 * 3600e3).toISOString().slice(0, 10); }
+/* 解析治療欄位：「Ceftriaxone 2 g IV q24h（D3/7）；Acetaminophen prn」→ 結構化用藥；非藥物片段（培養、返院條件、已更換導尿管）歸為治療備註 */
+function parseMeds(p) {
+  const meds = [], notes = [];
+  String(p.tx || '').split(/；|;|＋|\+/).map((s) => s.trim()).filter(Boolean).forEach((seg) => {
+    if (/pending|培養|返院|抽血|更換|計畫|依.*處方|依醫囑|追蹤|視為/.test(seg)) { notes.push(seg); return; }
+    const m = /^([A-Za-z][A-Za-z\/\-]*|[一-鿿]+)\s*((?:[\d,]+(?:\.\d+)?)\s*(?:mg\/m²|mg|mcg|g|mL|U))?\s*(IV|PO|SC|IM)?\s*(q\d+h|bid|tid|qid|qd|hs|prn)?\s*(.*)$/i.exec(seg);
+    if (!m) { notes.push(seg); return; }
+    const rest = m[5] || ''; const course = (/D\d+\s*\/\s*\d+|D\d+\s*[–-]\s*\d+/.exec(rest) || [''])[0].replace(/\s/g, '');
+    const route = m[3] ? m[3].toUpperCase() : 'PO';
+    const freq = m[4] ? m[4].toLowerCase() : '';
+    meds.push({ name: m[1], dose: m[2] ? m[2].replace(/\s+/g, ' ') : '', route, freq, course, prn: freq === 'prn', iv: route === 'IV', raw: seg });
+  });
+  return { meds, notes };
+}
+/* 給藥時間：IV q24h 依今日到府派工時間；其餘依頻次時段；今日到府紀錄有勾 IV 任務即顯示已給 */
+function medTiming(p, med) {
+  if (med.prn) return { text: '需要時' + (MED_PRN[med.name] ? '：' + MED_PRN[med.name] : ''), due: false };
+  const jobs = (state.dispatch || []).filter((j) => j.pid === p.id && j.tasks.some((t) => /IV|抗生素/.test(t)));
+  if (med.iv) {
+    const given = jobs.map((j) => j.record && isToday(j.record.t) && (j.record.done || []).some((t) => /IV|抗生素/.test(t)) ? j : null).filter(Boolean).pop();
+    if (given) return { text: '今日 ' + fmtT(given.record.t) + ' 已給（' + staff(given.nurse) + '）', due: false, given: true };
+    if (med.freq === 'q24h' && jobs[0]) return { text: '本次到府給藥（' + jobs[0].time + '）', due: true };
+  }
+  const slots = MED_SLOTS[med.freq] || (med.freq === 'q24h' ? ['08:00'] : null);
+  if (!slots) return { text: '依 HIS 處方時間', due: false };
+  const now = tpMin(); const next = slots.find((s) => hmMin(s) > now);
+  return { text: slots.join('／') + '・下次 ' + (next || '明 ' + slots[0]), due: false };
+}
+function medOrders(p) { return ((state.decisions || {})[p.id] || []).filter((d) => d.kind === '醫囑'); }
+function medNewOrders(p) { const ack = Date.parse(p.medAck || 0) || 0; return medOrders(p).filter((d) => (Date.parse(d.t) || 0) > ack); }
+/* 重要醫囑：依序為醫師新醫囑、通知醫師條件、監測、氧療、路徑護理醫囑、今日檢驗、治療備註、個別目標 */
+function importantOrders(p) {
+  const out = []; const c = p.critical || {}, tg = p.targets || {}, m = (p.ms && p.ms.length) ? latest(p) : {};
+  const fresh = medNewOrders(p);
+  medOrders(p).slice().reverse().forEach((d) => out.push({ cat: '醫師醫囑', text: d.text, meta: fmtT(d.t) + '・' + d.who, isNew: fresh.includes(d) }));
+  const lim = []; if (c.sbpMin) lim.push('SBP <' + c.sbpMin); if (c.hrMax) lim.push('HR >' + c.hrMax + (c.hrMin ? ' 或 <' + c.hrMin : '')); if (c.spo2Min) lim.push('SpO₂ <' + c.spo2Min + '%'); if (c.rrMax) lim.push('RR >' + c.rrMax);
+  lim.push('T ≥' + (c.feverRed || tg.tempMax || 38.0).toFixed(1)); if (c.glucoseMin) lim.push('血糖 <' + c.glucoseMin); if (c.dWtRed) lim.push('體重 48 小時 +' + c.dWtRed + ' kg');
+  out.push({ cat: '通知醫師', text: lim.join('、') + ' → 立即通知主責醫師（' + staff(p.md) + '），啟動紅色流程', key: true });
+  out.push({ cat: '監測', text: '生命徵象 ' + (p.freq || '依計畫') + '；同 B0 量測條件' });
+  out.push({ cat: '氧療', text: (tg.o2Max ? 'O₂ ≤' + tg.o2Max + ' L/min，維持 SpO₂ ≥' + tg.spo2Min + '%' : '計畫為室內空氣，維持 SpO₂ ≥' + (tg.spo2Min || 92) + '%') + (m.o2 ? '；目前 O₂ ' + m.o2 + ' L/min' + (m.o2 > (tg.o2Max || 0) ? '（超出計畫，已通報）' : '') : '') });
+  const dx = String(p.dx || ''); const P2 = {
+    PNA: ['半坐臥，每 2 小時深呼吸與有效咳嗽'].concat(/吸入/.test(dx) ? ['進食採坐姿、軟質飲食，吞嚥安全評估'] : []),
+    HF: ['每日晨起空腹體重（同一體重計）', '限水 1,500 mL／日、低鈉飲食；評估下肢水腫與端坐呼吸'],
+    UTI: ['每日飲水 ≥1,500 mL（無限水禁忌），記錄尿量與性狀'].concat(/導尿/.test(dx) ? ['導尿管照護：每日清潔、引流袋低於膀胱、避免折管'] : []),
+    SSTI: ['抬高患肢；每日傷口照片對準標記線', '紅腫超出標記線、出現水泡或波動感立即通知'],
+    CHEMO: ['體溫 ≥38.0 立即返院抽血 CBC／ANC（疑發熱性嗜中性球低下）', '每次到府口腔與手足皮膚檢視、CTCAE 評分'],
+  }[p.pathway] || [];
+  P2.forEach((t) => out.push({ cat: '護理醫囑', text: t }));
+  const labs = []; (state.dispatch || []).filter((j) => j.pid === p.id).forEach((j) => j.tasks.filter((t) => /抽血|POCT/.test(t)).forEach((t) => labs.push(t + '（' + j.time + ' 到府）')));
+  if (typeof labPanels === 'function') labPanels(p).pending.forEach((x) => labs.push(x));
+  labs.forEach((t) => out.push({ cat: '檢驗', text: t }));
+  parseMeds(p).notes.forEach((t) => out.push({ cat: '治療備註', text: t }));
+  const tgd = ((state.decisions || {})[p.id] || []).filter((d) => d.kind === '個別目標').slice(-1)[0];
+  if (tgd) out.push({ cat: '個別目標', text: tgd.text, meta: fmtT(tgd.t) + '・' + tgd.who });
+  return out;
+}
+function medAllergyHtml(p) { const a = MED_ALLERGY[p.id]; return a ? '<div class="med-allergy">⚠ 藥物過敏：<b>' + esc(a) + '</b></div>' : '<div class="med-allergy none">藥物過敏：無已知藥物過敏</div>'; }
+function medRowHtml(p, med) {
+  const tm = medTiming(p, med);
+  return '<div class="med-row' + (tm.due ? ' due' : '') + (tm.given ? ' given' : '') + '"><div class="med-n"><b>' + esc(med.name) + '</b> ' + esc(med.dose || '（劑量依 HIS 處方）') + ' <span class="tag">' + (med.iv ? 'IV' : '口服') + '</span>' + (med.freq ? ' <span class="faint">' + esc(MED_FREQ[med.freq] || med.freq) + '</span>' : '') + (med.course ? ' <span class="tag acc">' + esc(med.course) + '</span>' : '') + '</div><div class="med-t">' + esc(tm.text) + '</div>' + medChangeHtml(p, med) + '</div>';
+}
+/* 醫師醫囑提到這個藥名時，在藥品列下標「醫囑變更」 */
+function medChangeHtml(p, med) { const d = medOrders(p).filter((x) => x.text.toLowerCase().includes(String(med.name).toLowerCase())).slice(-1)[0]; return d ? '<div class="med-chg">醫囑變更（' + fmtT(d.t) + '・' + esc(d.who) + '）：' + esc(d.text) + '</div>' : ''; }
+/* 派工卡上的一行摘要 */
+function rnMedLine(p) {
+  const { meds } = parseMeds(p); const n = medNewOrders(p).length;
+  return '<div class="med-line">💊 ' + (meds.length ? meds.map((x) => esc(x.name) + (x.iv ? ' IV' : '') + (x.prn ? ' prn' : '')).join('、') : '依 HIS 處方') + (MED_ALLERGY[p.id] ? ' <span class="pill red">過敏</span>' : '') + (n ? ' <span class="pill new-order">新醫囑 ' + n + '</span>' : '') + '</div>';
+}
+/* 到府紀錄表單裡的「用藥與重要醫囑」 */
+function rnMedBox(p) {
+  const { meds } = parseMeds(p); const fresh = medNewOrders(p); const ords = importantOrders(p).filter((o) => o.cat !== '醫師醫囑');
+  return '<div class="medbox" id="rn-med"><div class="medbox-h"><b>用藥與重要醫囑</b><span class="faint">HIS 醫囑（示範）</span></div>' + medAllergyHtml(p) +
+    meds.map((x) => medRowHtml(p, x)).join('') +
+    (fresh.length ? '<div class="ord-new-box">' + fresh.map((d) => '<div class="ord-new"><span class="pill new-order">新醫囑</span> ' + esc(d.text) + ' <span class="faint">' + fmtT(d.t) + '・' + esc(d.who) + '</span></div>').join('') + '<button class="btn sm primary" type="button" data-act="med-ack" data-p="' + p.id + '">確認已讀新醫囑（' + fresh.length + '）</button></div>' : '') +
+    '<ul class="ord-list">' + ords.filter((o) => o.key || o.cat === '護理醫囑' || o.cat === '檢驗').slice(0, 4).map((o) => '<li><span class="tag">' + esc(o.cat) + '</span> ' + esc(o.text) + '</li>').join('') + '</ul>' +
+    '<div class="btn-row"><button class="btn sm" type="button" data-act="med-open" data-p="' + p.id + '">完整用藥與醫囑</button></div></div>';
+}
+function medModalHtml(p) {
+  const { meds } = parseMeds(p); const fresh = medNewOrders(p); const ords = importantOrders(p);
+  let h = '<div class="med-modal">' + medAllergyHtml(p);
+  h += '<div class="rpt-h" style="margin-top:10px"><b>目前用藥</b><span class="faint">' + meds.length + ' 項・HIS 處方（示範）</span></div>' + (meds.length ? meds.map((x) => medRowHtml(p, x)).join('') : '<div class="note">治療欄位沒有可辨識的藥品，請以 HIS 處方為準。</div>');
+  h += '<div class="rpt-h" style="margin-top:14px"><b>重要醫囑</b><span class="faint">' + ords.length + ' 項' + (fresh.length ? '・新醫囑 ' + fresh.length : '') + '</span></div>';
+  h += '<div class="ord-table">' + ords.map((o) => '<div class="ord-r' + (o.isNew ? ' new' : '') + (o.key ? ' key' : '') + '"><span class="tag' + (o.cat === '醫師醫囑' ? ' acc' : '') + '">' + esc(o.cat) + '</span><div>' + (o.isNew ? '<span class="pill new-order">新</span> ' : '') + esc(o.text) + (o.meta ? '<div class="faint" style="font-size:13.5px">' + esc(o.meta) + '</div>' : '') + '</div></div>').join('') + '</div>';
+  if (fresh.length && rptIsNurse()) h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm primary" type="button" data-act="med-ack" data-p="' + p.id + '">確認已讀新醫囑（' + fresh.length + '）</button></div>';
+  if (p.medAckBy) h += '<div class="note" style="margin-top:6px">護理最近確認：' + esc(p.medAckBy) + '・' + fmtT(p.medAck) + '</div>';
+  h += '<div class="note" style="margin-top:8px">示範：用藥由個案治療欄位解析、過敏為示範資料；正式版接 HIS 用藥與醫囑查詢 API（MedicationRequest、ServiceRequest）唯讀顯示，見資訊室需求單第 2 節第 1 層。</div></div>';
+  return h;
+}
+function openMeds(pid) { const p = P(pid); if (!p) return; openModal('用藥與重要醫囑・' + p.name + '（' + p.id + '）', medModalHtml(p)); }
+/* 醫師端「開立醫囑（HIS）」：依路徑列常用醫囑，或自行輸入 */
+function openOrderChoice(pid, who) {
+  const p = P(pid); if (!p) return; const opts = (ORDER_TEMPLATES[p.pathway] || []).concat(['其他（自行輸入）']);
+  const done = (v) => { decide(pid, '醫囑', v + '（HIS・示範）', who); toast('醫囑已開立（示範）：護理端與戰情室同步顯示「新醫囑」'); render(); };
+  promptChoice('開立醫囑（HIS）・' + p.name, opts, (v) => { if (v === '其他（自行輸入）') { promptText('開立醫囑（HIS）・' + p.name, '例：Cefazolin 改為 2 g IV q8h；明日返院門診', done); return; } done(v); });
+}
+/* 同步進來的新醫囑：護理端（登入護理師的派工病人）跳提示 */
+function newOrdersFor(oldS, newS) {
+  try {
+    const role = (typeof ROLE === 'string' && ROLE) ? ROLE : newS.tab; if (role !== 'rn') return [];
+    const mine = new Set((newS.dispatch || []).filter((j) => j.nurse === (newS.rn || {}).nurse).map((j) => j.pid)); const out = [];
+    Object.keys(newS.decisions || {}).forEach((pid) => { if (!mine.has(pid)) return; const seen = new Set(((oldS.decisions || {})[pid] || []).map((d) => d.t + d.text)); (newS.decisions[pid] || []).filter((d) => d.kind === '醫囑' && !seen.has(d.t + d.text)).forEach((d) => out.push({ pid, text: d.text, who: d.who })); });
+    return out;
+  } catch (e) { return []; }
+}
+function announceOrders(list) { const a = list[list.length - 1]; const p = P(a.pid); toast('📋 新醫囑・' + (p ? p.name : a.pid) + '（' + a.who + '）：' + a.text + (list.length > 1 ? '（共 ' + list.length + ' 則）' : ''), 7000); }
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-act="med-open"],button[data-act="med-ack"]'); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  const p = P(b.dataset.p); if (!p) return;
+  if (b.dataset.act === 'med-open') { openMeds(p.id); return; }
+  const fresh = medNewOrders(p); if (!fresh.length) { toast('沒有未讀的新醫囑'); return; }
+  const who = rptWho(); p.medAck = state.now; p.medAckBy = who;
+  decide(p.id, '醫囑確認', '護理已讀新醫囑：' + fresh.map((d) => d.text).join('；'), who);
+  toast('已確認 ' + fresh.length + ' 則新醫囑（寫入決策紀錄並同步）');
+  const mo = document.getElementById('modal'); if (mo && mo.classList.contains('on') && /用藥與重要醫囑/.test(document.getElementById('modal-title').textContent)) openMeds(p.id);
+  const box = document.getElementById('rn-med'); if (box) box.outerHTML = rnMedBox(p);
+  rptRerender();
 }, true);
 
 /* ===================== 渲染與事件 ===================== */
@@ -5499,6 +5639,20 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
 .rn-rpt{border:1px solid var(--line-soft);background:var(--surface-2);border-radius:10px;padding:8px 10px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
 .rn-rpt-l{display:flex;flex-direction:column;gap:2px;font-size:15px;line-height:1.4}.rn-rpt-l b{font-size:16px}.rn-rpt-l span{color:var(--ink-2)}
 .rn-rpt .rpt-Hx{color:var(--red)}.rn-rpt .rpt-Lx{color:var(--yellow)}
+/* 用藥與重要醫囑（護理端） */
+.med-line{font-size:15px;margin-top:5px;color:var(--ink-2);line-height:1.4}
+.pill.new-order{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+.medbox{border:1px solid var(--line-soft);border-radius:10px;padding:8px 10px;margin-bottom:10px;background:var(--surface)}
+.medbox-h{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}.medbox-h b{font-size:16px}.medbox-h .faint{font-size:13px}
+.med-allergy{background:var(--red-soft);color:var(--red);border-radius:8px;padding:5px 8px;font-size:15px;margin-bottom:6px}.med-allergy.none{background:var(--surface-2);color:var(--ink-2)}
+.med-row{border-top:1px solid var(--line-soft);padding:6px 0;font-size:15.5px;line-height:1.4}.med-row:first-of-type{border-top:0}
+.med-row .med-t{color:var(--ink-3);font-size:14px}.med-row.due .med-t{color:var(--accent-ink);font-weight:700}.med-row.given .med-t{color:var(--green)}
+.med-chg{margin-top:3px;font-size:13.5px;color:var(--yellow);font-weight:600}
+.ord-new-box{border:1.5px solid var(--accent);background:var(--accent-soft);border-radius:8px;padding:6px 8px;margin:6px 0;display:flex;flex-direction:column;gap:6px}
+.ord-new{font-size:15px;line-height:1.4}
+.ord-list{margin:6px 0 8px;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:14.5px;line-height:1.4}
+.ord-table{display:flex;flex-direction:column}.ord-r{display:grid;grid-template-columns:88px 1fr;gap:8px;padding:6px 0;border-top:1px solid var(--line-soft);font-size:15.5px;line-height:1.45}
+.ord-r .tag{justify-self:start;align-self:start}.ord-r.new{background:var(--accent-soft);border-radius:6px;padding:6px}.ord-r.key>div{color:var(--red);font-weight:600}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -5516,7 +5670,7 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1794190133317') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1794191311890') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
@@ -5642,11 +5796,13 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
     if (!o || !o.patients) { setDot('err', '試算表內容不是 AiKESO 狀態'); return false; }
     UI_KEYS.forEach((k) => { o[k] = state[k]; });
     const newMs = newMeasurements(state, o);
+    const newOrd = (typeof newOrdersFor === 'function') ? newOrdersFor(state, o) : []; /* 護理端：醫師新開的醫囑 */
     lastSeen = rm.json; saveVer(rm.ver); goFast(); state = o; if (typeof ensureBeds === 'function') ensureBeds(state.patients);
     if (roleNow() === 'pt' && state.pt) { const me = window.__currentUser; if (me && P(me.who)) state.pt.pid = me.who; else if (!P(state.pt.pid)) { state.pt.pid = state.patients[0] ? state.patients[0].id : null; } }
     if (roleNow() === 'doc' && state.doc && state.doc.screen === 'case' && !P(state.doc.pid)) { state.doc.screen = 'list'; }
     saveLocal(); render(); window.__syncStats.applied++; log('applied v' + rm.ver + ' from ' + rm.by + ' (' + src + ')');
     announceMeasurements(newMs);
+    if (newOrd.length && typeof announceOrders === 'function') announceOrders(newOrd);
     setDot('ok', '已同步 ' + hhmmss() + '（來自 ' + ((typeof ROLE_LABEL !== 'undefined' && ROLE_LABEL[rm.by]) || rm.by || '其他裝置') + (rm.who ? '・' + rm.who : '') + '・' + src + '・' + (T ? T.label : '') + '・v' + rm.ver + '）');
     return true;
   };
