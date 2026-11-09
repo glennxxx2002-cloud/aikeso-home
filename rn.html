@@ -3799,7 +3799,7 @@ function jobCard(j, full) {
   return '<div class="pcard stripe ' + (jobLate(j) ? 'red' : L.light) + '" style="border-radius:8px"><div style="display:flex;gap:8px;align-items:center"><b class="num" style="font-size:20.5px">' + j.time + '</b><b>' + esc(p.name) + '</b><span class="faint" style="font-size:16.5px">' + PATHWAYS[p.pathway].short + ' D' + p.day + '・' + esc(j.area) + '</span><span style="margin-left:auto">' + jobBadge(j) + '</span></div>' +
     '<div class="chip-row" style="margin-top:6px">' + j.tasks.map((t) => '<span class="tag' + (j.first ? ' acc' : '') + '">' + esc(t) + '</span>').join('') + '</div>' +
     '<div class="faint num" style="font-size:16px;margin-top:5px">' + pill(L.light, L.light === 'red' ? '紅' : L.light === 'yellow' ? '黃' : '綠') + ' ' + (L.ev.reasons[0] ? esc(L.ev.reasons[0].s) : '穩定') + (j.log.length ? '・' + j.log.map((l) => l.what + ' ' + fmtT(l.t)).join('・') : '') + '</div>' +
-    '<div class="btn-row" style="margin-top:8px">' + (j.status === 0 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">出發打卡</button>' : j.status === 1 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">到達打卡</button>' : j.status === 2 ? '<button class="btn xs primary" data-act="job-open" data-j="' + j.id + '">填寫到府紀錄</button>' : '<button class="btn xs" data-act="job-open" data-j="' + j.id + '">查看紀錄</button>') + '' + joinBtn(p.id) + '<button class="btn xs" data-act="rn-video" data-p="' + p.id + '">視訊</button><button class="btn xs" data-act="case" data-p="' + p.id + '">個案卡</button><button class="btn xs" data-act="rn-nav" data-j="' + j.id + '">導航</button></div></div>';
+    '<div class="btn-row" style="margin-top:8px">' + (j.status === 0 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">出發打卡</button>' : j.status === 1 ? '<button class="btn xs primary" data-act="job-step" data-j="' + j.id + '">到達打卡</button>' : j.status === 2 ? '<button class="btn xs primary" data-act="job-open" data-j="' + j.id + '">填寫到府紀錄</button>' : '<button class="btn xs" data-act="job-open" data-j="' + j.id + '">查看紀錄</button>') + '' + joinBtn(p.id) + '<button class="btn xs" data-act="rn-video" data-p="' + p.id + '">視訊</button><button class="btn xs" data-act="case" data-p="' + p.id + '">個案卡</button><button class="btn xs" data-act="rpt-open" data-p="' + p.id + '">報告與影像</button><button class="btn xs" data-act="rn-nav" data-j="' + j.id + '">導航</button></div></div>';
 }
 function renderRn() {
   const s = state.rn; const nurse = s.nurse; const jobs = jobsOf(nurse); const done = jobs.filter((j) => j.status === 3).length;
@@ -3820,7 +3820,7 @@ function renderRn() {
       if (rec && s.editRec !== j.id) {
         body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + (j.status >= 3 ? '・已完成 ' : '・停留中・最近更新 ') + fmtT(rec.t) + '</span></h3><dl class="kv"><dt>生命徵象</dt><dd class="num">BP ' + rec.m.sbp + '/' + rec.m.dbp + '、HR ' + rec.m.hr + '、RR ' + rec.m.rr + '、SpO₂ ' + rec.m.spo2 + '%、T ' + rec.m.temp.toFixed(1) + (rec.m.weight ? '、體重 ' + rec.m.weight : '') + '</dd><dt>執行</dt><dd>' + rec.done.map(esc).join('、') + '</dd>' + (rec.wound ? '<dt>傷口</dt><dd>' + esc(rec.wound) + '</dd>' : '') + (rec.dart ? '<dt>DART</dt><dd>D：' + esc(rec.dart.D) + '<br>A：' + esc(rec.dart.A) + '<br>R：' + esc(rec.dart.R) + '<br>T：' + esc(rec.dart.T) + '</dd>' : '') + (rec.ctcae ? '<dt>CTCAE</dt><dd>' + (Object.entries(rec.ctcae).filter(([, g]) => g > 0).map(([a, g]) => esc(a) + ' Grade ' + g).join('、') || '全部 Grade 0') + '</dd>' : '') + (rec.pu ? '<dt>壓傷</dt><dd>' + esc(rec.pu.stage) + (rec.pu.dressing ? '・' + esc(rec.pu.dressing) + (rec.pu.start ? '・起始 ' + esc(rec.pu.start) : '') : '') + '</dd>' : '') + '<dt>備註</dt><dd>' + esc(rec.note || '—') + '</dd><dt>簽名</dt><dd>' + (rec.signed ? '病人／照顧者已簽名' : '未簽名') + '</dd>' + recordHistoryHtml(j) + '</dl><div class="btn-row" style="margin-top:8px">' + recordButtons(j) + '</div></div>';
       } else {
-        body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・' + j.time + '</span></h3><form id="rn-form" data-j="' + j.id + '">' +
+        body = '<div class="pcard"><h3>到府紀錄 <span class="r">' + esc(p.name) + '・' + j.time + '</span></h3><form id="rn-form" data-j="' + j.id + '">' + rnReportsStrip(p) +
           '<label style="display:flex;gap:8px;align-items:center;font-size:18px;margin-bottom:8px"><input type="checkbox" name="idc" required> 身分確認（雙重辨識）</label>' +
           (A1_ENABLED ? '<div class="aibox" id="rn-voicebox"><div class="aibox-h">語音轉文字護理紀錄 <span class="faint">A1・AIRIC 語音辨識＋報告（DART）草稿，護理師核對後才送出</span></div><div class="faint" style="font-size:15px;margin-bottom:6px">AI Prompt：護理紀錄（DART）　錄音上限 60 分鐘　正式版接 AIRIC「取得語音辨識／取得報告」</div><textarea name="voice" rows="2" placeholder="按「語音輸入」口述，或按「示範語句」"></textarea><div class="btn-row" style="margin-top:6px"><button class="btn sm" type="button" data-act="rn-voice">🎤 語音輸入</button><button class="btn sm" type="button" data-act="rn-voice-demo">示範語句</button><button class="btn sm primary" type="button" data-act="rn-voice-parse">取得報告（結構化＋DART 草稿）</button></div><div class="faint" id="rn-voice-msg" style="font-size:15px;margin-top:4px"></div>' + dartBox() + '</div>' : '') +
           '<div class="field" style="margin-bottom:6px"><span><b>生命徵象</b>（同 B0 量測條件：' + esc(p.b0.note.split('，').slice(1).join('，') || '坐姿') + '）</span></div><div class="fgrid">' +
@@ -4546,6 +4546,7 @@ function recordHistoryHtml(j) {
 function recordButtons(j) {
   return '<button class="btn sm primary" data-act="rn-rec-edit" data-j="' + j.id + '">更新紀錄（再量一次／補充）</button>' +
     (j.status < 3 ? '<button class="btn sm" data-act="rn-rec-finish" data-j="' + j.id + '">完成打卡</button>' : '') +
+    '<button class="btn sm" data-act="rpt-open" data-p="' + j.pid + '">檢查報告與影像</button>' +
     '<button class="btn sm" data-rn="route">回派工清單</button>';
 }
 /* 更新模式：把上一次紀錄填回表單（量測、備註、任務、簽名、語音、DART、CTCAE、壓傷） */
@@ -4652,12 +4653,13 @@ function svgWound(o) {
 }
 /* 壓力性損傷照片（薦骨）：依分期畫不同深度與顏色 */
 function svgPU(o) {
-  const st = String(o.stage || ''); let wound;
-  if (/第 ?1/.test(st)) wound = '<ellipse cx="150" cy="120" rx="34" ry="24" fill="#c0504d" opacity=".55"/>';
-  else if (/第 ?2/.test(st)) wound = '<ellipse cx="150" cy="120" rx="30" ry="22" fill="#e07b7b"/><ellipse cx="150" cy="120" rx="22" ry="15" fill="#f0a3a3"/>';
-  else if (/第 ?3/.test(st)) wound = '<ellipse cx="150" cy="120" rx="34" ry="26" fill="#8b1e1e"/><ellipse cx="142" cy="116" rx="12" ry="8" fill="#d8c25a" opacity=".9"/><ellipse cx="160" cy="126" rx="8" ry="6" fill="#d8c25a" opacity=".8"/>';
-  else if (/第 ?4/.test(st)) wound = '<ellipse cx="150" cy="120" rx="38" ry="28" fill="#5a1212"/><ellipse cx="150" cy="122" rx="16" ry="9" fill="#d9d9d9"/>';
-  else if (/深部|DTI/.test(st)) wound = '<ellipse cx="150" cy="120" rx="36" ry="24" fill="#5b2a4a" opacity=".8"/>';
+  const st = String(o.stage || ''); let wound; const n = (k) => new RegExp('(Stage|第)\\s*' + k).test(st);
+  if (/無壓傷/.test(st)) wound = '<ellipse cx="150" cy="120" rx="30" ry="20" fill="#e3b493" opacity=".6"/>';
+  else if (n(1)) wound = '<ellipse cx="150" cy="120" rx="34" ry="24" fill="#c0504d" opacity=".55"/>';
+  else if (n(2)) wound = '<ellipse cx="150" cy="120" rx="30" ry="22" fill="#e07b7b"/><ellipse cx="150" cy="120" rx="22" ry="15" fill="#f0a3a3"/>';
+  else if (n(3)) wound = '<ellipse cx="150" cy="120" rx="34" ry="26" fill="#8b1e1e"/><ellipse cx="142" cy="116" rx="12" ry="8" fill="#d8c25a" opacity=".9"/><ellipse cx="160" cy="126" rx="8" ry="6" fill="#d8c25a" opacity=".8"/>';
+  else if (n(4)) wound = '<ellipse cx="150" cy="120" rx="38" ry="28" fill="#5a1212"/><ellipse cx="150" cy="122" rx="16" ry="9" fill="#d9d9d9"/>';
+  else if (/深層|深部|DTI/.test(st)) wound = '<ellipse cx="150" cy="120" rx="36" ry="24" fill="#5b2a4a" opacity=".8"/>';
   else wound = '<ellipse cx="150" cy="120" rx="34" ry="25" fill="#3b2b22"/><ellipse cx="150" cy="120" rx="26" ry="18" fill="#201712"/>';
   return svgWrap(300, 240, '<defs><linearGradient id="sk2" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#e5bf9f"/><stop offset="1" stop-color="#d3a584"/></linearGradient></defs>' +
     '<rect width="300" height="240" fill="url(#sk2)"/><ellipse cx="80" cy="150" rx="90" ry="110" fill="#d9ad8c" opacity=".7"/><ellipse cx="220" cy="150" rx="90" ry="110" fill="#d9ad8c" opacity=".7"/><line x1="150" y1="150" x2="150" y2="240" stroke="#c4906f" stroke-width="3" opacity=".6"/>' + wound +
@@ -4673,6 +4675,26 @@ function svgUS(o) {
     '<text x="8" y="16" font-size="12" fill="#fff" font-family="monospace">' + esc(o.label || 'US') + '</text>', true);
 }
 const RPT_DOC_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80" class="rpt-svg rpt-doc"><rect x="6" y="4" width="52" height="72" rx="6" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/><path d="M40 4 v16 h16" fill="none" stroke="var(--line)" stroke-width="2"/><g stroke="var(--ink-3)" stroke-width="3" stroke-linecap="round"><line x1="16" y1="32" x2="48" y2="32"/><line x1="16" y1="42" x2="48" y2="42"/><line x1="16" y1="52" x2="40" y2="52"/><line x1="16" y1="62" x2="30" y2="62"/></g></svg>';
+/* 今日到府紀錄的傷口測量（「12×9 → 13×10」取最後一組），讓護理師拍的照片依實際測量大小呈現 */
+function rptWoundRec(p) {
+  const today = new Date(state.now || Date.now()).toDateString();
+  const js = (state.dispatch || []).filter((j) => j.pid === p.id && j.record && j.record.wound && new Date(j.record.t).toDateString() === today).sort((a, b) => String(a.record.t).localeCompare(String(b.record.t)));
+  const j = js[js.length - 1]; if (!j) return null;
+  const all = [...String(j.record.wound).matchAll(/(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/g)]; const mm = all[all.length - 1]; if (!mm) return null;
+  return { w: Math.min(30, +mm[1]), h: Math.min(22, +mm[2]), text: j.record.wound, by: staff(j.nurse) };
+}
+/* 角色：護理端（rn.html，或合一 App／原型切到護理分頁）只看不下醫囑，改「請醫師判讀」 */
+function rptIsNurse() { try { return (typeof ROLE === 'string' && ROLE) ? ROLE === 'rn' : state.tab === 'rn'; } catch (e) { return false; } }
+/* 到府紀錄表單開著時不整頁重繪，避免護理師打到一半的內容被清掉 */
+function rptRerender() { if (document.getElementById('rn-form')) return; render(); }
+/* 護理端到府紀錄上方的摘要條：最新檢驗、待報告、影像件數；按鈕開完整報告，蜂窩組織炎另有「與前次傷口照片比對」 */
+function rnReportsStrip(p) {
+  const L = labPanels(p), S = imagingStudies(p); const last = L.panels[L.panels.length - 1];
+  const labs = last ? L.items.filter((k) => last.vals[k] != null).map((k) => { const f = labFlag(k, last.vals[k]); return k + ' ' + labFmt(k, last.vals[k]) + (f ? ' <b class="rpt-' + f + 'x">' + f + '</b>' : ''); }).join('、') : '尚無';
+  const wound = S.filter((s) => s.series === 'wound' && s.kind !== 'missing'); const lastW = wound[wound.length - 1];
+  return '<div class="rn-rpt" id="rn-rpt"><div class="rn-rpt-l"><b>檢查報告與影像</b><span>檢驗 ' + (last ? esc(last.md) + '：' : '') + labs + '</span>' + (L.pending.length ? '<span>⏳ ' + L.pending.map(esc).join('；') + '</span>' : '') + '<span>影像／報告 ' + S.filter((s) => s.kind !== 'missing').length + ' 件' + (p.pu ? '・壓傷 ' + esc(p.pu.stage) : '') + '</span></div>' +
+    '<div class="btn-row"><button class="btn sm" type="button" data-act="rpt-open" data-p="' + p.id + '">查看報告與影像</button>' + (lastW ? '<button class="btn sm" type="button" data-act="img-open" data-p="' + p.id + '" data-i="' + lastW.i + '" data-cmp="1">與前次傷口照片比對</button>' : '') + '</div></div>';
+}
 /* ---------- 影像／報告清單（依路徑推導，含護理端／病人端上傳的照片） ---------- */
 function imagingStudies(p) {
   const S = []; const m = (typeof latest === 'function' && p.ms && p.ms.length) ? latest(p) : {}; const dx = String(p.dx || ''); const adm = p.admit || DSTR(5), dis = p.discharge || DSTR(3);
@@ -4699,8 +4721,9 @@ function imagingStudies(p) {
     S.push({ series: 'xr', kind: 'report', title: sideN + limb + ' X 光（報告）', md: adm, src: 'HIS 檢查報告', status: '已判讀', by: '放射科', findings: '軟組織腫脹；無軟組織內氣體；骨皮質完整，無骨膜反應或骨髓炎徵象。', impression: '蜂窩組織炎，無壞死性筋膜炎或骨髓炎的影像證據', svg: null });
     S.push({ series: 'wound', kind: 'photo', title: '傷口照片・出院日標記（Day 0）', md: dis, src: '護理端上傳', status: '已比對', by: '訪視護理師', findings: '紅腫範圍 ' + base.w + '×' + base.h + ' cm，以筆標記邊界；無水泡、無滲液、無波動感。', impression: '基準照片（後續以標記線比對）', svg: svgWound({ w: base.w, h: base.h, mark: base, label: sideN + limb + '・Day 0・' + dis }) });
     S.push({ series: 'wound', kind: 'photo', title: '傷口照片・' + DSTR(1), md: DSTR(1), src: '病人端上傳', status: '已比對', by: '訪視護理師', findings: '紅腫範圍 ' + base.w + '×' + base.h + ' cm，未超出標記線；顏色較前日略淡。', impression: '穩定，持續觀察', svg: svgWound({ w: base.w, h: base.h, mark: base, label: sideN + limb + '・' + DSTR(1) }), prev: S.length - 1 });
-    const worse = (m.symptoms || []).some((s) => /擴大/.test(s));
-    if (m.photo) S.push({ series: 'wound', kind: 'photo', title: '傷口照片・今日', md: DSTR(0), src: '病人端／護理端上傳', status: '待護理師比對', by: '訪視護理師', findings: worse ? '紅腫範圍約 ' + (base.w + 2) + '×' + (base.h + 2) + ' cm，超出標記線約 2 cm；局部溫熱、疼痛加劇。AI 比對：面積較前日 +38%（僅供參考）。' : '紅腫範圍 ' + base.w + '×' + base.h + ' cm，未超出標記線。AI 比對：面積與前日相當（僅供參考）。', impression: worse ? '紅腫擴大，需醫師評估抗生素反應' : '穩定', svg: svgWound({ w: base.w + (worse ? 2 : 0), h: base.h + (worse ? 2 : 0), mark: base, label: sideN + limb + '・今日 ' + DSTR(0) }), prev: S.length - 1, fresh: true });
+    const worse = (m.symptoms || []).some((s) => /擴大/.test(s)); const nr = rptWoundRec(p);
+    if (m.photo && nr) { const big = nr.w * nr.h > base.w * base.h * 1.05, small = nr.w * nr.h < base.w * base.h * 0.95; S.push({ series: 'wound', kind: 'photo', title: '傷口照片・今日（到府）', md: DSTR(0), src: '護理端上傳', status: '護理師已測量', by: nr.by, findings: '護理師到府測量：' + nr.text + '（' + nr.w + '×' + nr.h + ' cm，' + (big ? '超出標記線' : '未超出標記線') + '）。', impression: big ? '紅腫擴大，請醫師評估抗生素反應' : small ? '紅腫範圍縮小' : '穩定', svg: svgWound({ w: nr.w, h: nr.h, mark: base, label: sideN + limb + '・到府 ' + DSTR(0) }), prev: S.length - 1, fresh: true }); }
+    else if (m.photo) S.push({ series: 'wound', kind: 'photo', title: '傷口照片・今日', md: DSTR(0), src: '病人端／護理端上傳', status: '待護理師比對', by: '訪視護理師', findings: worse ? '紅腫範圍約 ' + (base.w + 2) + '×' + (base.h + 2) + ' cm，超出標記線約 2 cm；局部溫熱、疼痛加劇。AI 比對：面積較前日 +38%（僅供參考）。' : '紅腫範圍 ' + base.w + '×' + base.h + ' cm，未超出標記線。AI 比對：面積與前日相當（僅供參考）。', impression: worse ? '紅腫擴大，需醫師評估抗生素反應' : '穩定', svg: svgWound({ w: base.w + (worse ? 2 : 0), h: base.h + (worse ? 2 : 0), mark: base, label: sideN + limb + '・今日 ' + DSTR(0) }), prev: S.length - 1, fresh: true });
     else S.push({ series: 'wound', kind: 'missing', title: '傷口照片・今日', md: DSTR(0), src: '尚未上傳', note: '病人端或護理端上傳後會出現在這裡並與前次自動比對' });
   }
   if (p.pathway === 'CHEMO') {
@@ -4737,7 +4760,7 @@ function reportsSection(p) {
   }
   if (L.pending.length || L.micro.length) h += '<div class="rpt-notes">' + L.pending.map((x) => '<span class="tag">⏳ ' + esc(x) + '</span>').join('') + L.micro.map((x) => '<span class="tag acc">🧫 ' + esc(x) + '</span>').join('') + '</div>';
   h += '<div class="img-strip">' + S.map((s) => imgThumb(p, s)).join('') + '</div>';
-  if (L.noImg) h += '<div class="note" style="margin-top:4px">出院後尚無追蹤影像；可於下方「完整報告與影像」安排追蹤胸部 X 光（HIS 醫囑・示範）。</div>';
+  if (L.noImg) h += '<div class="note" style="margin-top:4px">' + (rptIsNurse() ? '出院後尚無追蹤影像；需要追蹤時於「完整報告與影像」按「請醫師判讀」通知主責醫師。' : '出院後尚無追蹤影像；可於下方「完整報告與影像」安排追蹤胸部 X 光（HIS 醫囑・示範）。') + '</div>';
   h += '<div class="btn-row" style="margin-top:8px"><button class="btn sm" data-act="rpt-open" data-p="' + p.id + '">完整報告與影像</button></div>';
   h += '<div class="note" style="margin-top:6px">示範：檢驗數值依個案資料推導、影像為合成示意圖。正式版由資訊室提供 HIS 檢驗報告 API 與 PACS 影像（DICOMweb／WADO-RS）介接，醫師端直接查閱原始報告與影像。</div></div>';
   return h;
@@ -4756,6 +4779,11 @@ function rptModalHtml(p) {
   if (L.pending.length || L.micro.length) h += '<div class="rpt-notes">' + L.pending.map((x) => '<span class="tag">⏳ ' + esc(x) + '</span>').join('') + L.micro.map((x) => '<span class="tag acc">🧫 ' + esc(x) + '</span>').join('') + '</div>';
   h += '<div class="rpt-h" style="margin-top:14px"><b>影像與檢查報告</b><span class="faint">PACS・HIS 檢查報告・護理端／病人端上傳</span></div>';
   h += '<div class="img-grid">' + S.map((s) => imgThumb(p, s)).join('') + '</div>';
+  if (rptIsNurse()) {
+    h += '<div class="btn-row" style="margin-top:12px"><button class="btn sm primary" type="button" data-act="rpt-ask" data-p="' + p.id + '">請醫師判讀</button></div>';
+    h += '<div class="note" style="margin-top:8px">護理端可查閱檢驗、影像與報告；「請醫師判讀」通知主責醫師（' + esc(staff(p.md)) + '），寫入決策紀錄並同步。追蹤檢驗與影像由醫師開立。影像皆為合成示意圖，非真實病人。</div></div>';
+    return h;
+  }
   h += '<div class="btn-row" style="margin-top:12px"><button class="btn sm primary" data-act="rpt-order" data-p="' + p.id + '" data-what="' + (p.pathway === 'HF' ? 'BNP／Cr／K 抽血' : p.pathway === 'CHEMO' ? 'CBC／ANC 抽血' : 'CBC／CRP 抽血') + '">安排追蹤抽血</button><button class="btn sm" data-act="rpt-order" data-p="' + p.id + '" data-what="' + (p.pathway === 'UTI' ? '腎臟超音波' : p.pathway === 'SSTI' ? '患肢 X 光' : '胸部 X 光') + '">安排追蹤影像</button></div>';
   h += '<div class="note" style="margin-top:8px">安排追蹤會寫入決策紀錄並同步到戰情室與護理端（P1：醫囑於既有 HIS 開立；此處為示範）。影像皆為合成示意圖，非真實病人。</div></div>';
   return h;
@@ -4770,7 +4798,7 @@ function imgViewerHtml(p, i, cmp) {
   if (cmp && prevS) h += '<div class="img-cmp"><div><div class="faint">前次・' + esc(prevS.md) + '</div>' + pic(prevS) + '</div><div><div class="faint">本次・' + esc(s.md) + '</div>' + pic(s) + '</div></div>';
   else h += pic(s);
   h += '<dl class="kv rpt-report"><dt>所見</dt><dd>' + esc(s.findings || '—') + '</dd><dt>結論</dt><dd><b>' + esc(s.impression || '—') + '</b></dd><dt>判讀</dt><dd>' + esc(s.by || '—') + '・' + esc(s.status) + '</dd>' + (cmp && prevS ? '<dt>前次結論</dt><dd>' + esc(prevS.impression) + '</dd>' : '') + '</dl>';
-  h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm" data-act="rpt-open" data-p="' + p.id + '">‹ 報告總覽</button>' + (prevS ? '<button class="btn sm' + (cmp ? ' primary' : '') + '" data-act="img-cmp" data-p="' + p.id + '" data-i="' + i + '">' + (cmp ? '取消並列' : '與前次並列') + '</button>' : '') + '<button class="btn sm" data-act="img-note" data-p="' + p.id + '" data-i="' + i + '">記錄判讀</button></div>';
+  h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm" data-act="rpt-open" data-p="' + p.id + '">‹ 報告總覽</button>' + (prevS ? '<button class="btn sm' + (cmp ? ' primary' : '') + '" data-act="img-cmp" data-p="' + p.id + '" data-i="' + i + '">' + (cmp ? '取消並列' : '與前次並列') + '</button>' : '') + '<button class="btn sm" type="button" data-act="img-note" data-p="' + p.id + '" data-i="' + i + '">' + (rptIsNurse() ? '記錄護理觀察' : '記錄判讀') + '</button>' + (rptIsNurse() ? '<button class="btn sm" type="button" data-act="rpt-ask" data-p="' + p.id + '" data-i="' + i + '">請醫師判讀</button>' : '') + '</div>';
   h += '<div class="note" style="margin-top:8px">示意影像・非真實病人。正式版於此載入 PACS 原始影像（DICOMweb）與放射科報告。</div></div>';
   return h;
 }
@@ -4781,11 +4809,12 @@ document.addEventListener('click', (e) => {
   e.preventDefault(); e.stopPropagation();
   const act = b.dataset.act, pid = b.dataset.p, i = parseInt(b.dataset.i || '0');
   if (act === 'rpt-open') { openReports(pid); return; }
-  if (act === 'img-open') { openImage(pid, i, false); return; }
+  if (act === 'img-open') { openImage(pid, i, b.dataset.cmp === '1'); return; }
+  if (act === 'rpt-ask') { const p = P(pid); if (!p) return; const s = b.dataset.i != null ? imagingStudies(p)[i] : null; decide(pid, '請醫師判讀', '護理端請主責醫師判讀' + (s ? '：[' + s.title + '] ' + (s.impression || '') : '檢查報告與影像'), rptWho()); toast('已通知 ' + staff(p.md) + ' 判讀（寫入決策紀錄並同步）'); rptRerender(); return; }
   if (act === 'img-nav') { openImage(pid, i + parseInt(b.dataset.d || '1'), false); return; }
   if (act === 'img-cmp') { openImage(pid, i, !rptView.cmp); return; }
   if (act === 'rpt-order') { const p = P(pid); if (!p) return; decide(pid, '醫囑', '安排追蹤 ' + b.dataset.what + '（HIS 醫囑・示範）', rptWho()); toast('已安排追蹤 ' + b.dataset.what + '（示範）；已寫入決策紀錄並同步'); render(); return; }
-  if (act === 'img-note') { const p = P(pid); if (!p) return; const s = imagingStudies(p)[i]; promptText('影像判讀／備註・' + (s ? s.title : ''), '例：與前次比較實質化縮小，維持目前抗生素；D7 再追蹤', (v) => { decide(pid, '影像判讀', (s ? '[' + s.title + '] ' : '') + v, rptWho()); toast('判讀已記錄到決策紀錄'); render(); }); return; }
+  if (act === 'img-note') { const p = P(pid); if (!p) return; const s = imagingStudies(p)[i]; const rn = rptIsNurse(); promptText((rn ? '護理觀察・' : '影像判讀／備註・') + (s ? s.title : ''), rn ? '例：與前次照片比較紅腫未超出標記線，無滲液；已衛教抬高患肢' : '例：與前次比較實質化縮小，維持目前抗生素；D7 再追蹤', (v) => { decide(pid, rn ? '護理觀察' : '影像判讀', (s ? '[' + s.title + '] ' : '') + v, rptWho()); toast((rn ? '護理觀察' : '判讀') + '已記錄到決策紀錄'); rptRerender(); }); return; }
 }, true);
 
 /* ===================== 渲染與事件 ===================== */
@@ -5516,6 +5545,10 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
 .img-cmp{display:grid;grid-template-columns:1fr 1fr;gap:8px}.img-cmp .faint{font-size:13.5px;margin-bottom:4px}.img-cmp .img-view-pic{max-height:42vh}.img-cmp .img-view-pic .rpt-svg{max-height:42vh}
 .rpt-report{margin-top:10px;font-size:16.5px}
 @media (max-width:520px){.img-cmp{grid-template-columns:1fr}.img-strip .img-th{flex-basis:118px}}
+/* 護理端到府紀錄：檢查報告與影像摘要條 */
+.rn-rpt{border:1px solid var(--line-soft);background:var(--surface-2);border-radius:10px;padding:8px 10px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
+.rn-rpt-l{display:flex;flex-direction:column;gap:2px;font-size:15px;line-height:1.4}.rn-rpt-l b{font-size:16px}.rn-rpt-l span{color:var(--ink-2)}
+.rn-rpt .rpt-Hx{color:var(--red)}.rn-rpt .rpt-Lx{color:var(--yellow)}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -5533,7 +5566,7 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1794186097671') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1794190133317') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
