@@ -7,6 +7,6 @@
 | 戰情室 | https://glennxxx2002-cloud.github.io/aikeso-home/war.html | 密碼 |
 | 醫師端 | https://glennxxx2002-cloud.github.io/aikeso-home/doc.html | D13495、D102 |
 | 護理端 | https://glennxxx2002-cloud.github.io/aikeso-home/rn.html | N002–N004 |
-| 病人端 | https://glennxxx2002-cloud.github.io/aikeso-home/pt.html?bed=V01（V01–V08） | 床號已帶入 |
+| 病人端 | https://glennxxx2002-cloud.github.io/aikeso-home/pt.html?bed=V01（V01–V09） | 床號已帶入 |
 
 所有病人皆為虛構示範資料。
