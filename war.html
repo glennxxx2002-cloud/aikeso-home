@@ -4879,21 +4879,28 @@ function importantOrders(p) {
   if (tgd) out.push({ cat: '個別目標', text: tgd.text, meta: fmtT(tgd.t) + '・' + tgd.who });
   return out;
 }
+/* 目前用藥＝治療欄位解析＋醫師用「開立用藥」開立、未停用的藥（標新開立） */
+function allMeds(p) {
+  const meds = parseMeds(p).meds.slice(); const orders = medOrders(p);
+  orders.forEach((d) => { if (!d.rx) return; const stopped = orders.some((x) => x.t > d.t && /停用|停止|D\/C/i.test(x.text) && x.text.toLowerCase().includes(d.rx.name.toLowerCase())); if (stopped) return;
+    meds.push({ name: d.rx.name, dose: d.rx.dose, route: d.rx.route, freq: d.rx.freq, course: '', prn: d.rx.freq === 'prn', iv: d.rx.route === 'IV', raw: d.text, rxT: d.t, rxBy: d.who }); });
+  return meds;
+}
 function medAllergyHtml(p) { const a = MED_ALLERGY[p.id]; return a ? '<div class="med-allergy">⚠ 藥物過敏：<b>' + esc(a) + '</b></div>' : '<div class="med-allergy none">藥物過敏：無已知藥物過敏</div>'; }
 function medRowHtml(p, med) {
   const tm = medTiming(p, med);
-  return '<div class="med-row' + (tm.due ? ' due' : '') + (tm.given ? ' given' : '') + '"><div class="med-n"><b>' + esc(med.name) + '</b> ' + esc(med.dose || '（劑量依 HIS 處方）') + ' <span class="tag">' + (med.iv ? 'IV' : '口服') + '</span>' + (med.freq ? ' <span class="faint">' + esc(MED_FREQ[med.freq] || med.freq) + '</span>' : '') + (med.course ? ' <span class="tag acc">' + esc(med.course) + '</span>' : '') + '</div><div class="med-t">' + esc(tm.text) + '</div>' + medChangeHtml(p, med) + '</div>';
+  return '<div class="med-row' + (tm.due ? ' due' : '') + (tm.given ? ' given' : '') + '"><div class="med-n"><b>' + esc(med.name) + '</b> ' + esc(med.dose || '（劑量依 HIS 處方）') + ' <span class="tag">' + (med.iv ? 'IV' : med.route && med.route !== 'PO' ? esc(med.route) : '口服') + '</span>' + (med.rxT ? ' <span class="pill new-order">新開立</span>' : '') + (med.freq ? ' <span class="faint">' + esc(MED_FREQ[med.freq] || med.freq) + '</span>' : '') + (med.course ? ' <span class="tag acc">' + esc(med.course) + '</span>' : '') + '</div><div class="med-t">' + esc(tm.text) + (med.rxT ? '・' + esc(med.rxBy) + ' ' + fmtT(med.rxT) + ' 開立' : '') + '</div>' + medChangeHtml(p, med) + '</div>';
 }
 /* 醫師醫囑提到這個藥名時，在藥品列下標「醫囑變更」 */
-function medChangeHtml(p, med) { const d = medOrders(p).filter((x) => x.text.toLowerCase().includes(String(med.name).toLowerCase())).slice(-1)[0]; return d ? '<div class="med-chg">醫囑變更（' + fmtT(d.t) + '・' + esc(d.who) + '）：' + esc(d.text) + '</div>' : ''; }
+function medChangeHtml(p, med) { const d = medOrders(p).filter((x) => (!med.rxT || x.t > med.rxT) && x.text.toLowerCase().includes(String(med.name).toLowerCase())).slice(-1)[0]; return d ? '<div class="med-chg">醫囑變更（' + fmtT(d.t) + '・' + esc(d.who) + '）：' + esc(d.text) + '</div>' : ''; }
 /* 派工卡上的一行摘要 */
 function rnMedLine(p) {
-  const { meds } = parseMeds(p); const n = medNewOrders(p).length;
+  const meds = allMeds(p); const n = medNewOrders(p).length;
   return '<div class="med-line">💊 ' + (meds.length ? meds.map((x) => esc(x.name) + (x.iv ? ' IV' : '') + (x.prn ? ' prn' : '')).join('、') : '依 HIS 處方') + (MED_ALLERGY[p.id] ? ' <span class="pill red">過敏</span>' : '') + (n ? ' <span class="pill new-order">新醫囑 ' + n + '</span>' : '') + '</div>';
 }
 /* 到府紀錄表單裡的「用藥與重要醫囑」 */
 function rnMedBox(p) {
-  const { meds } = parseMeds(p); const fresh = medNewOrders(p); const ords = importantOrders(p).filter((o) => o.cat !== '醫師醫囑');
+  const meds = allMeds(p); const fresh = medNewOrders(p); const ords = importantOrders(p).filter((o) => o.cat !== '醫師醫囑');
   return '<div class="medbox" id="rn-med"><div class="medbox-h"><b>用藥與重要醫囑</b><span class="faint">HIS 醫囑（示範）</span></div>' + medAllergyHtml(p) +
     meds.map((x) => medRowHtml(p, x)).join('') +
     (fresh.length ? '<div class="ord-new-box">' + fresh.map((d) => '<div class="ord-new"><span class="pill new-order">新醫囑</span> ' + esc(d.text) + ' <span class="faint">' + fmtT(d.t) + '・' + esc(d.who) + '</span></div>').join('') + '<button class="btn sm primary" type="button" data-act="med-ack" data-p="' + p.id + '">確認已讀新醫囑（' + fresh.length + '）</button></div>' : '') +
@@ -4901,7 +4908,7 @@ function rnMedBox(p) {
     '<div class="btn-row"><button class="btn sm" type="button" data-act="med-open" data-p="' + p.id + '">完整用藥與醫囑</button></div></div>';
 }
 function medModalHtml(p) {
-  const { meds } = parseMeds(p); const fresh = medNewOrders(p); const ords = importantOrders(p);
+  const meds = allMeds(p); const fresh = medNewOrders(p); const ords = importantOrders(p);
   let h = '<div class="med-modal">' + medAllergyHtml(p);
   h += '<div class="rpt-h" style="margin-top:10px"><b>目前用藥</b><span class="faint">' + meds.length + ' 項・HIS 處方（示範）</span></div>' + (meds.length ? meds.map((x) => medRowHtml(p, x)).join('') : '<div class="note">治療欄位沒有可辨識的藥品，請以 HIS 處方為準。</div>');
   h += '<div class="rpt-h" style="margin-top:14px"><b>重要醫囑</b><span class="faint">' + ords.length + ' 項' + (fresh.length ? '・新醫囑 ' + fresh.length : '') + '</span></div>';
@@ -4916,23 +4923,24 @@ function openMeds(pid) { const p = P(pid); if (!p) return; openModal('用藥與�
 /* 個案卡（醫師端個案畫面、戰情室抽屜、護理端個案卡共用）：「目前用藥與重要醫囑」區塊。
    醫師醫囑列出護理已讀／未讀（閉環）；醫師端多一顆「開立醫囑（HIS）」，護理端有新醫囑時多「確認已讀」。 */
 function caseMedSection(p, ctx) {
-  const { meds } = parseMeds(p); const ords = importantOrders(p); const docOrd = ords.filter((o) => o.cat === '醫師醫囑'); const fresh = medNewOrders(p);
+  const meds = allMeds(p); const ords = importantOrders(p); const docOrd = ords.filter((o) => o.cat === '醫師醫囑'); const fresh = medNewOrders(p);
   const keyCats = ['通知醫師', '監測', '氧療', '護理醫囑', '檢驗', '治療備註', '個別目標'];
   let h = '<div class="sec" id="med-sec"><h4>目前用藥與重要醫囑</h4>' + medAllergyHtml(p);
+  if (typeof egfrOf === 'function') { const eg = egfrOf(p), lv = liverOf(p); h += '<div class="med-ctx">腎功能 ' + (eg ? 'eGFR ' + eg.egfr + '（Cr ' + eg.cr + '・' + eg.md + '）' : '近期無 Cr') + '・肝功能 ' + esc(lv.text) + '</div>'; }
   h += '<div class="med-list">' + (meds.length ? meds.map((x) => medRowHtml(p, x)).join('') : '<div class="note">治療欄位沒有可辨識的藥品，請以 HIS 處方為準。</div>') + '</div>';
   if (docOrd.length) h += '<div class="med-sub">醫師醫囑 <span class="faint">' + docOrd.length + ' 則' + (fresh.length ? '・護理未讀 ' + fresh.length : '・護理皆已讀') + '</span></div><div class="ord-table">' + docOrd.slice(0, 5).map((o) => '<div class="ord-r' + (o.isNew ? ' new' : '') + '"><span class="tag acc">醫囑</span><div>' + esc(o.text) + '<div class="faint" style="font-size:13.5px">' + esc(o.meta) + '・' + (o.isNew ? '<b class="ord-unread">護理未讀</b>' : '<span class="ord-read">護理已讀' + (p.medAckBy ? '（' + esc(p.medAckBy) + ' ' + fmtT(p.medAck) + '）' : '') + '</span>') + '</div></div></div>').join('') + '</div>';
   h += '<div class="med-sub">重要醫囑</div><div class="ord-table">' + ords.filter((o) => keyCats.includes(o.cat)).map((o) => '<div class="ord-r' + (o.key ? ' key' : '') + '"><span class="tag">' + esc(o.cat) + '</span><div>' + esc(o.text) + (o.meta ? '<div class="faint" style="font-size:13.5px">' + esc(o.meta) + '</div>' : '') + '</div></div>').join('') + '</div>';
   h += '<div class="btn-row" style="margin-top:8px"><button class="btn sm" type="button" data-act="med-open" data-p="' + p.id + '">完整用藥與醫囑</button>' +
-    (ctx === 'doc' ? '<button class="btn sm primary" type="button" data-act="order" data-p="' + p.id + '">開立醫囑（HIS）</button>' : '') +
+    (ctx === 'doc' ? '<button class="btn sm primary" type="button" data-act="rx-new" data-p="' + p.id + '">開立用藥（安全檢核）</button><button class="btn sm" type="button" data-act="order" data-p="' + p.id + '">開立醫囑（HIS）</button>' : '') +
     (ctx === 'rn' && fresh.length ? '<button class="btn sm primary" type="button" data-act="med-ack" data-p="' + p.id + '">確認已讀新醫囑（' + fresh.length + '）</button>' : '') + '</div>';
   h += '<div class="note" style="margin-top:6px">示範：用藥由治療欄位解析、過敏為示範資料；正式版接 HIS 用藥與醫囑查詢 API 唯讀顯示。</div></div>';
   return h;
 }
 /* 醫師端「開立醫囑（HIS）」：依路徑列常用醫囑，或自行輸入 */
 function openOrderChoice(pid, who) {
-  const p = P(pid); if (!p) return; const opts = (ORDER_TEMPLATES[p.pathway] || []).concat(['其他（自行輸入）']);
-  const done = (v) => { decide(pid, '醫囑', v + '（HIS・示範）', who); toast('醫囑已開立（示範）：護理端與戰情室同步顯示「新醫囑」'); render(); };
-  promptChoice('開立醫囑（HIS）・' + p.name, opts, (v) => { if (v === '其他（自行輸入）') { promptText('開立醫囑（HIS）・' + p.name, '例：Cefazolin 改為 2 g IV q8h；明日返院門診', done); return; } done(v); });
+  const p = P(pid); if (!p) return; const RX = '開立用藥（自動檢核過敏、肝腎功能、交互作用）'; const opts = (ORDER_TEMPLATES[p.pathway] || []).concat([RX, '其他（自行輸入）']);
+  const done = (v) => cdsGate(pid, v + '（HIS・示範）', who); /* 文字中有藥名就做用藥安全檢核（cds-rx.js） */
+  promptChoice('開立醫囑（HIS）・' + p.name, opts, (v) => { if (v === RX) { openRxForm(pid, who); return; } if (v === '其他（自行輸入）') { promptText('開立醫囑（HIS）・' + p.name, '例：Cefazolin 改為 2 g IV q8h；明日返院門診', done); return; } done(v); });
 }
 /* 同步進來的新醫囑：護理端（登入護理師的派工病人）跳提示 */
 function newOrdersFor(oldS, newS) {
@@ -4956,6 +4964,244 @@ document.addEventListener('click', (e) => {
   const mo = document.getElementById('modal'); if (mo && mo.classList.contains('on') && /用藥與重要醫囑/.test(document.getElementById('modal-title').textContent)) openMeds(p.id);
   const box = document.getElementById('rn-med'); if (box) box.outerHTML = rnMedBox(p);
   rptRerender();
+}, true);
+
+/* ===================== 開立用藥安全檢核（醫師端 CPOE 示範） =====================
+   醫師開立用藥（「開立用藥」表單、常用醫囑、自行輸入）時，系統即時檢核並提醒：
+   ・過敏：同類藥禁忌（如 Penicillin 過敏開 Ampicillin/sulbactam）、交叉過敏注意（Penicillin → 頭孢菌素、碳青黴烯；Aspirin 誘發氣喘 → NSAID 禁忌）
+   ・腎功能：以最新 Cr、年齡、性別估算 eGFR（CKD-EPI 2021），依藥品規則提示調整劑量並可一鍵套用建議劑量
+   ・肝功能：AST／ALT 或肝病史，提示減量或避免
+   ・交互作用：與目前用藥（含已開立的新醫囑）比對，如 QT 延長加成、出血、高血鉀、INR 上升
+   ・重複用藥：同一藥品或同類藥品（β-lactam、NSAID、抗凝血劑、RAAS）
+   ・劑量與年齡／疾病：每日最大劑量、≥65 歲 Beers 提醒、失智症用抗精神病藥
+   分級：禁忌（須填覆寫理由）、警告（須勾選已了解）、注意（僅提示）。檢核結果與覆寫理由寫入決策紀錄並同步到護理端。
+   示範規則，非完整藥物資料庫；正式版由 HIS 用藥安全檢核（藥劑部規則、院內藥物資料庫）回傳。 */
+const MED_HEPATIC = { 'AK-031': '慢性 B 型肝炎併肝硬化 Child-Pugh A（示範）' };
+const SEV_LABEL = { 3: '禁忌', 2: '警告', 1: '注意' };
+const FREQ_PER_DAY = { q4h: 6, q6h: 4, q8h: 3, q12h: 2, q24h: 1, q48h: 0.5, qd: 1, qid: 4, tid: 3, bid: 2, hs: 1, prn: 4 };
+const RX_FREQS = ['q24h', 'q12h', 'q8h', 'q6h', 'q4h', 'q48h', 'qd', 'bid', 'tid', 'qid', 'hs', 'prn'];
+Object.assign(MED_FREQ, { q4h: '每 4 小時', q48h: '每 48 小時' });
+Object.assign(MED_SLOTS, { q4h: ['02:00', '06:00', '10:00', '14:00', '18:00', '22:00'], q48h: ['08:00'] });
+const norm = (s) => String(s || '').replace(/\s+/g, '').toLowerCase();
+/* 依腎功能的劑量規則：rx 已等於建議劑量時回報「已依腎功能調整」 */
+function renalAdj(rx, sev, msg, sug) { if (sug && rx && (!sug.dose || norm(rx.dose) === norm(sug.dose)) && (!sug.freq || norm(rx.freq) === norm(sug.freq))) return { ok: '已依腎功能調整（' + [sug.dose, sug.freq && (MED_FREQ[sug.freq] || sug.freq)].filter(Boolean).join(' ') + '）' }; return { sev, msg, suggest: sug }; }
+const DRUG_DB = {
+  Ceftriaxone: { grp: '抗生素', cls: ['cephalosporin', 'beta-lactam'], dose: '2 g', route: 'IV', freq: 'q24h', hepatic: (h, e) => (h.impaired && e != null && e < 30 ? { sev: 1, msg: '肝腎功能同時不全時每日 ≤2 g' } : null) },
+  Cefazolin: { grp: '抗生素', cls: ['cephalosporin', 'beta-lactam'], dose: '1 g', route: 'IV', freq: 'q8h', renal: (e, rx) => (e < 35 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl 11–34）：劑量減半並延長為每 12 小時', { dose: '500 mg', freq: 'q12h' }) : null) },
+  'Ampicillin/sulbactam': { grp: '抗生素', cls: ['penicillin', 'beta-lactam'], dose: '3 g', route: 'IV', freq: 'q6h', renal: (e, rx) => (e < 30 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl 15–29）：延長為每 12 小時', { dose: '3 g', freq: 'q12h' }) : null) },
+  'Amoxicillin/clavulanate': { grp: '抗生素', cls: ['penicillin', 'beta-lactam'], dose: '875/125 mg', route: 'PO', freq: 'bid', alias: /Augmentin|Curam/i, renal: (e, rx) => (e < 30 ? renalAdj(rx, 2, 'eGFR ' + e + '：避免 875 mg 劑型，改 500/125 mg 每 12 小時', { dose: '500/125 mg', freq: 'q12h' }) : null), hepatic: (h) => (h.impaired ? { sev: 2, msg: '肝功能不全小心使用；clavulanate 曾致膽汁滯留性肝炎，監測肝功能' } : null) },
+  'Piperacillin/tazobactam': { grp: '抗生素', cls: ['penicillin', 'beta-lactam'], dose: '4.5 g', route: 'IV', freq: 'q6h', alias: /Tazocin|Zosyn/i, renal: (e, rx) => (e < 20 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl <20）：2.25 g 每 6 小時', { dose: '2.25 g', freq: 'q6h' }) : e <= 40 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl 20–40）：3.375 g 每 6 小時', { dose: '3.375 g', freq: 'q6h' }) : null) },
+  Ertapenem: { grp: '抗生素', cls: ['carbapenem', 'beta-lactam'], dose: '1 g', route: 'IV', freq: 'q24h', renal: (e, rx) => (e <= 30 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl ≤30）：500 mg 每 24 小時', { dose: '500 mg', freq: 'q24h' }) : null) },
+  Levofloxacin: { grp: '抗生素', cls: ['fluoroquinolone', 'qt'], dose: '750 mg', route: 'PO', freq: 'qd', renal: (e, rx) => (e < 20 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl 10–19）：首劑 750 mg，之後 500 mg 每 48 小時', { dose: '500 mg', freq: 'q48h' }) : e < 50 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl 20–49）：750 mg 每 48 小時', { dose: '750 mg', freq: 'q48h' }) : null), age: (p) => (p.age >= 60 ? { sev: 1, msg: '≥60 歲肌腱炎／肌腱斷裂風險較高（併用類固醇更高），亦注意血糖異常與譫妄' } : null) },
+  Azithromycin: { grp: '抗生素', cls: ['macrolide', 'qt'], dose: '500 mg', route: 'PO', freq: 'qd', hepatic: (h) => (h.impaired ? { sev: 1, msg: '肝功能不全小心使用，監測肝功能' } : null) },
+  Clarithromycin: { grp: '抗生素', cls: ['macrolide', 'qt', 'cyp3a4'], dose: '500 mg', route: 'PO', freq: 'bid', renal: (e, rx) => (e < 30 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl <30）：劑量減半', { dose: '250 mg', freq: 'bid' }) : null) },
+  'Sulfamethoxazole/trimethoprim': { grp: '抗生素', cls: ['sulfa'], dose: '800/160 mg', route: 'PO', freq: 'bid', alias: /TMP-SMX|Bactrim|Baktar|SMX/i, renal: (e, rx) => (e < 15 ? { sev: 3, msg: 'eGFR ' + e + '（CrCl <15）：不建議使用' } : e < 30 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl 15–30）：劑量減半', { dose: '400/80 mg', freq: 'bid' }) : null) },
+  Metronidazole: { grp: '抗生素', cls: [], dose: '500 mg', route: 'PO', freq: 'q8h', hepatic: (h) => (h.impaired ? { sev: 2, msg: '肝硬化／肝功能不全：減量（重度 Child-Pugh C 減 50%），監測神經毒性' } : null) },
+  Nitrofurantoin: { grp: '抗生素', cls: [], dose: '100 mg', route: 'PO', freq: 'bid', renal: (e) => (e < 30 ? { sev: 3, msg: 'eGFR ' + e + '（CrCl <30）：療效不足、毒性增加，避免使用（Beers）' } : e < 45 ? { sev: 1, msg: 'eGFR ' + e + '：僅短期使用（≤7 天）並監測' } : null), age: (p) => (p.age >= 65 ? { sev: 1, msg: '≥65 歲避免長期使用（肺毒性、周邊神經病變）' } : null) },
+  Vancomycin: { grp: '抗生素', cls: ['nephrotoxic'], dose: '15 mg/kg', route: 'IV', freq: 'q12h', renal: (e) => (e < 60 ? { sev: 2, msg: 'eGFR ' + e + '：依腎功能延長給藥間隔，以 AUC／谷濃度監測（會同藥師）' } : null) },
+  Gentamicin: { grp: '抗生素', cls: ['aminoglycoside', 'nephrotoxic'], dose: '5 mg/kg', route: 'IV', freq: 'q24h', renal: (e) => (e < 60 ? { sev: 2, msg: 'eGFR ' + e + '：延長給藥間隔並監測血中濃度' } : null), age: (p) => (p.age >= 65 ? { sev: 1, msg: '≥65 歲耳毒性與腎毒性風險較高' } : null) },
+  Acetaminophen: { grp: '止痛退燒', cls: ['apap'], dose: '500 mg', route: 'PO', freq: 'prn', alias: /Paracetamol|Panadol|Scanol/i, maxDaily: (p, h) => (h.impaired ? 2000 : 4000), hepatic: (h) => (h.impaired ? { sev: 2, msg: '肝病／肝功能不全：每日總量 ≤2 g（含複方）' } : null) },
+  Ibuprofen: { grp: '止痛退燒', cls: ['nsaid'], dose: '400 mg', route: 'PO', freq: 'tid', maxDaily: () => 3200, renal: (e) => (e < 30 ? { sev: 3, msg: 'eGFR ' + e + '：NSAID 可能造成急性腎損傷，避免使用' } : e < 60 ? { sev: 2, msg: 'eGFR ' + e + '：可能加重腎功能惡化，避免或以最低劑量最短天數' } : null), age: nsaidAge },
+  Naproxen: { grp: '止痛退燒', cls: ['nsaid'], dose: '250 mg', route: 'PO', freq: 'bid', maxDaily: () => 1500, renal: (e) => (e < 30 ? { sev: 3, msg: 'eGFR ' + e + '：NSAID 可能造成急性腎損傷，避免使用' } : e < 60 ? { sev: 2, msg: 'eGFR ' + e + '：可能加重腎功能惡化，避免或以最低劑量最短天數' } : null), age: nsaidAge },
+  Ketorolac: { grp: '止痛退燒', cls: ['nsaid'], dose: '15 mg', route: 'IV', freq: 'q6h', maxDaily: (p) => (p.age >= 65 ? 60 : 120), renal: (e) => (e < 30 ? { sev: 3, msg: 'eGFR ' + e + '：腎功能嚴重不全禁用' } : e < 60 ? { sev: 2, msg: 'eGFR ' + e + '：每次 ≤15 mg、每日 ≤60 mg' } : null), age: (p) => [nsaidAge(p), p.age >= 65 ? { sev: 1, msg: '≥65 歲每次 ≤15 mg、每日 ≤60 mg，總療程 ≤5 天' } : null] },
+  Tramadol: { grp: '止痛退燒', cls: ['opioid', 'serotonergic'], dose: '50 mg', route: 'PO', freq: 'q6h', maxDaily: (p, h, e) => (e != null && e < 30 ? 200 : p.age > 75 ? 300 : 400), renal: (e, rx) => (e < 30 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl <30）：每 12 小時，每日 ≤200 mg', { dose: '50 mg', freq: 'q12h' }) : null), hepatic: (h) => (h.impaired ? { sev: 2, msg: '肝硬化：50 mg 每 12 小時' } : null), age: (p) => (p.age > 75 ? { sev: 1, msg: '>75 歲每日 ≤300 mg，注意譫妄與跌倒' } : null) },
+  Morphine: { grp: '止痛退燒', cls: ['opioid'], dose: '2 mg', route: 'IV', freq: 'q4h', renal: (e) => (e < 30 ? { sev: 2, msg: 'eGFR ' + e + '：活性代謝物蓄積（呼吸抑制），減量延長間隔或改用其他鴉片類' } : null), hepatic: (h) => (h.impaired ? { sev: 1, msg: '肝功能不全：減量並延長間隔' } : null) },
+  Furosemide: { grp: '心血管', cls: ['loop'], dose: '40 mg', route: 'PO', freq: 'bid' },
+  Spironolactone: { grp: '心血管', cls: ['k-sparing'], dose: '25 mg', route: 'PO', freq: 'qd', renal: (e, rx) => (e < 30 ? { sev: 3, msg: 'eGFR ' + e + '：高血鉀風險，不建議使用' } : e < 50 ? renalAdj(rx, 2, 'eGFR ' + e + '：起始 12.5 mg 每日一次，3 天及 1 週追蹤 K 與 Cr', { dose: '12.5 mg', freq: 'qd' }) : null) },
+  'Potassium chloride': { grp: '心血管', cls: ['k-supp'], dose: '20 mEq', route: 'PO', freq: 'qd', alias: /KCl/, renal: (e) => (e < 30 ? { sev: 2, msg: 'eGFR ' + e + '：高血鉀風險，依血鉀調整並追蹤' } : null) },
+  'Sacubitril/valsartan': { grp: '心血管', cls: ['raas', 'arni'], dose: '49/51 mg', route: 'PO', freq: 'bid', alias: /Entresto/i, renal: (e, rx) => (e < 30 ? renalAdj(rx, 2, 'eGFR ' + e + '：起始 24/26 mg 每日兩次', { dose: '24/26 mg', freq: 'bid' }) : null) },
+  Losartan: { grp: '心血管', cls: ['raas', 'arb'], dose: '50 mg', route: 'PO', freq: 'qd' },
+  Apixaban: { grp: '心血管', cls: ['anticoag'], dose: '5 mg', route: 'PO', freq: 'bid', renal: (e, rx, p, cr) => { const wt = p.ms && p.ms.length ? (latest(p).weight || (p.b0 || {}).weight) : null; const n = (p.age >= 80 ? 1 : 0) + (wt && wt <= 60 ? 1 : 0) + (cr >= 1.5 ? 1 : 0); return n >= 2 ? renalAdj(rx, 2, '符合減量條件（年齡 ≥80、體重 ≤60 kg、Cr ≥1.5 其中 2 項）：2.5 mg 每日兩次', { dose: '2.5 mg', freq: 'bid' }) : e < 15 ? { sev: 1, msg: 'eGFR ' + e + '：資料有限，審慎使用' } : null; } },
+  Warfarin: { grp: '心血管', cls: ['anticoag'], dose: '依 INR', route: 'PO', freq: 'qd' },
+  Digoxin: { grp: '心血管', cls: [], dose: '0.125 mg', route: 'PO', freq: 'qd', renal: (e) => (e < 60 ? { sev: 2, msg: 'eGFR ' + e + '：減量（0.0625–0.125 mg 每日或隔日）並監測血中濃度' } : null) },
+  Amiodarone: { grp: '心血管', cls: ['qt'], dose: '200 mg', route: 'PO', freq: 'qd', hepatic: (h) => (h.impaired ? { sev: 1, msg: '肝功能不全：監測肝功能（可致肝毒性）' } : null) },
+  Atorvastatin: { grp: '心血管', cls: ['statin'], dose: '20 mg', route: 'PO', freq: 'qd', hepatic: (h) => (h.impaired ? { sev: 2, msg: '活動性肝病或不明原因轉胺酶持續升高禁用；肝硬化須審慎評估' } : null) },
+  Metformin: { grp: '代謝', cls: [], dose: '500 mg', route: 'PO', freq: 'bid', renal: (e) => (e < 30 ? { sev: 3, msg: 'eGFR ' + e + '：禁用（乳酸中毒）' } : e < 45 ? { sev: 2, msg: 'eGFR ' + e + '：不建議新開始；已使用者每日 ≤1,000 mg 並追蹤腎功能' } : null), hepatic: (h) => (h.impaired ? { sev: 2, msg: '肝功能不全：乳酸中毒風險，避免使用' } : null) },
+  Empagliflozin: { grp: '代謝', cls: [], dose: '10 mg', route: 'PO', freq: 'qd', renal: (e) => (e < 20 ? { sev: 1, msg: 'eGFR ' + e + '：血糖效果有限，不建議為降血糖新開始' } : null) },
+  Ondansetron: { grp: '腸胃', cls: ['qt', '5ht3'], dose: '8 mg', route: 'PO', freq: 'q8h', hepatic: (h) => (h.impaired ? { sev: 1, msg: '重度肝功能不全每日 ≤8 mg' } : null) },
+  Metoclopramide: { grp: '腸胃', cls: ['d2'], dose: '10 mg', route: 'PO', freq: 'tid', renal: (e, rx) => (e < 60 ? renalAdj(rx, 1, 'eGFR ' + e + '：起始劑量減半', { dose: '5 mg', freq: 'tid' }) : null), age: (p) => (p.age >= 65 ? { sev: 1, msg: '≥65 歲錐體外症狀與遲發性運動不良風險，避免長期使用（Beers）' } : null) },
+  Haloperidol: { grp: '精神', cls: ['qt', 'd2', 'antipsychotic'], dose: '0.5 mg', route: 'PO', freq: 'hs', age: antipsyAge },
+  Quetiapine: { grp: '精神', cls: ['qt', 'antipsychotic'], dose: '12.5 mg', route: 'PO', freq: 'hs', age: antipsyAge },
+  Capecitabine: { grp: '腫瘤', cls: ['fluoropyrimidine'], dose: '1,250 mg/m²', route: 'PO', freq: 'bid', renal: (e, rx) => (e < 30 ? { sev: 3, msg: 'eGFR ' + e + '（CrCl <30）：禁用' } : e <= 50 ? renalAdj(rx, 2, 'eGFR ' + e + '（CrCl 30–50）：起始劑量降為 75%（950 mg/m² 每日兩次）', { dose: '950 mg/m²', freq: 'bid' }) : null), hepatic: (h) => (h.impaired ? { sev: 1, msg: '肝功能不全：密切監測肝功能與毒性' } : null) },
+  Filgrastim: { grp: '腫瘤', cls: [], dose: '5 mcg/kg', route: 'SC', freq: 'qd', alias: /G-CSF/i },
+  Allopurinol: { grp: '其他', cls: [], dose: '100 mg', route: 'PO', freq: 'qd', renal: (e, rx) => (e < 30 ? renalAdj(rx, 1, 'eGFR ' + e + '：起始 50 mg，緩慢調升', { dose: '50 mg', freq: 'qd' }) : e < 60 ? { sev: 1, msg: 'eGFR ' + e + '：起始 ≤100 mg，緩慢調升' } : null) },
+};
+function nsaidAge(p) { const out = []; if (p.age >= 65) out.push({ sev: 1, msg: '≥65 歲避免長期使用（腸胃道出血、腎損傷；Beers），必要時併用 PPI' }); if (p.pathway === 'HF' || /心衰竭/.test((p.comorb || []).join('') + (p.dx || ''))) out.push({ sev: 2, msg: '心衰竭：NSAID 造成水分滯留，可能使心衰竭惡化，避免使用' }); return out; }
+function antipsyAge(p) { const dem = /失智/.test((p.comorb || []).join('') + (p.dx || '')); return dem ? { sev: 2, msg: '失智症長者使用抗精神病藥增加死亡與中風風險（黑框警語），先排除可逆原因並以最低劑量最短期' } : p.age >= 65 ? { sev: 1, msg: '≥65 歲：跌倒、姿勢性低血壓與 QT 延長，最低劑量' } : null; }
+/* 交互作用：a、b 可為類別或藥名（雙向比對） */
+const RX_IA = [
+  ['nsaid', 'anticoag', 2, '出血風險上升（腸胃道出血），避免併用或加上 PPI 並密切觀察'],
+  ['nsaid', 'raas', 1, '降低降壓效果、可能使腎功能惡化；若再合併利尿劑（三重組合）急性腎損傷風險更高'],
+  ['nsaid', 'loop', 1, '降低利尿效果，監測體重與腎功能'],
+  ['qt', 'qt', 2, 'QT 延長加成（心律不整風險）：建議基準與追蹤心電圖，監測 K／Mg'],
+  ['Clarithromycin', 'Apixaban', 2, 'Clarithromycin 抑制 CYP3A4／P-gp，apixaban 濃度上升、出血風險'],
+  ['Clarithromycin', 'Atorvastatin', 2, '肌病變風險：atorvastatin 每日 ≤20 mg 或暫停'],
+  ['Clarithromycin', 'Digoxin', 2, 'Digoxin 濃度上升，監測血中濃度'],
+  ['Clarithromycin', 'Warfarin', 2, 'INR 上升，監測 INR'],
+  ['Capecitabine', 'Warfarin', 2, '黑框警語：INR 明顯上升、出血甚至死亡；須密切監測 INR 或改用其他抗凝血劑'],
+  ['Metronidazole', 'Warfarin', 2, 'INR 明顯上升，warfarin 減量並監測 INR'],
+  ['Sulfamethoxazole/trimethoprim', 'Warfarin', 2, 'INR 明顯上升，監測 INR'],
+  ['Sulfamethoxazole/trimethoprim', 'raas', 2, '高血鉀（trimethoprim 類 amiloride 作用），3–5 天內追蹤 K'],
+  ['Sulfamethoxazole/trimethoprim', 'k-sparing', 2, '高血鉀，3–5 天內追蹤 K'],
+  ['Levofloxacin', 'Warfarin', 1, 'INR 可能上升，監測 INR'],
+  ['k-sparing', 'raas', 1, '高血鉀：心衰竭常見組合，追蹤 K 與 Cr'],
+  ['k-sparing', 'k-supp', 2, '高血鉀風險，通常不併用鉀補充'],
+  ['raas', 'k-supp', 1, '高血鉀，追蹤 K'],
+  ['aminoglycoside', 'loop', 2, '耳毒性與腎毒性加成'],
+  ['aminoglycoside', 'Vancomycin', 2, '腎毒性加成，監測腎功能與血中濃度'],
+  ['Amiodarone', 'Digoxin', 2, 'Digoxin 濃度上升約 70%：digoxin 減量 30–50% 並監測'],
+  ['Amiodarone', 'Warfarin', 2, 'INR 上升：warfarin 減量 30–50% 並監測 INR'],
+  ['serotonergic', '5ht3', 1, '血清素症候群風險（少見），並可能降低 tramadol 止痛效果'],
+  ['d2', 'd2', 2, '錐體外症狀加成'],
+  ['loop', 'Digoxin', 1, '低血鉀會增加 digoxin 毒性，監測 K'],
+  ['Empagliflozin', 'loop', 1, '脫水與低血壓，注意體液狀態'],
+];
+/* 同類重複 */
+const RX_DUP = { 'beta-lactam': [2, '重複 β-lactam 抗生素'], nsaid: [2, '兩種 NSAID 併用無加成療效，增加出血與腎損傷'], anticoag: [3, '兩種抗凝血劑併用（出血風險），換藥請確認銜接方式'], raas: [3, 'ARNI 不可與 ARB／ACEi 併用；避免雙重 RAAS 阻斷'], opioid: [1, '兩種鴉片類併用，注意呼吸抑制與鎮靜'], fluoroquinolone: [2, '重複 fluoroquinolone'], macrolide: [2, '重複 macrolide'], apap: [2, '重複 acetaminophen（含複方總量每日 ≤4 g）'], '5ht3': [2, '重複 5-HT3 止吐藥'], antipsychotic: [2, '兩種抗精神病藥併用'] };
+/* 過敏原 → 藥物類別；交叉過敏 */
+const ALLERGEN_CLS = [[/penicillin|盤尼西林|amoxicillin|ampicillin/i, 'penicillin'], [/aspirin|阿斯匹靈|nsaid|ibuprofen/i, 'nsaid'], [/sulfa|磺胺|sulfamethoxazole/i, 'sulfa'], [/cephalosporin|頭孢|cef/i, 'cephalosporin'], [/quinolone|levofloxacin|ciprofloxacin/i, 'fluoroquinolone'], [/macrolide|azithromycin|clarithromycin|erythromycin/i, 'macrolide']];
+const ALLERGY_CROSS = [['penicillin', 'cephalosporin', 1, 'Penicillin 過敏者與頭孢菌素交叉過敏低（<2%，第三代更低）；首劑觀察，若過去為嚴重過敏（過敏性休克、SJS）應避免'], ['penicillin', 'carbapenem', 1, 'Penicillin 過敏者與碳青黴烯交叉過敏 <1%；首劑觀察'], ['nsaid', 'apap', 1, 'Aspirin 誘發氣喘者，acetaminophen 高劑量（單次 >1 g）少數會誘發；首次單次 ≤650 mg 並觀察']];
+function rxKey(name) { const s = String(name || ''); return Object.keys(DRUG_DB).find((k) => k.toLowerCase() === s.toLowerCase() || (DRUG_DB[k].alias && DRUG_DB[k].alias.test(s))) || null; }
+function rxHas(key, tag) { return key === tag || (DRUG_DB[key] && DRUG_DB[key].cls.includes(tag)); }
+function detectDrugs(text) { const t = String(text || ''); return Object.keys(DRUG_DB).filter((k) => new RegExp(k.replace(/[\/]/g, '\\/'), 'i').test(t) || (DRUG_DB[k].alias && DRUG_DB[k].alias.test(t))); }
+/* 從文字解析某藥的劑量與頻次（「Ertapenem 500 mg IV q24h」） */
+function rxFromText(text, key) {
+  const i = String(text).toLowerCase().indexOf(key.toLowerCase()); const seg = i >= 0 ? String(text).slice(i + key.length, i + key.length + 40) : '';
+  const d = /([\d,]+(?:\.\d+)?(?:\/[\d,]+(?:\.\d+)?)?)\s*(mg\/m²|mg\/kg|mcg\/kg|mg|mcg|g|mEq)/i.exec(seg); const f = /\b(q\d+h|qd|bid|tid|qid|hs|prn)\b/i.exec(seg); const r = /\b(IV|PO|SC|IM)\b/i.exec(seg);
+  return { dose: d ? d[1] + ' ' + d[2] : '', freq: f ? f[1].toLowerCase() : '', route: r ? r[1].toUpperCase() : '' };
+}
+/* 病人目前在用的藥（治療欄位＋已開立未停用的醫囑），回傳 [{key, src}] */
+function activeRx(p) {
+  const out = []; const add = (key, src) => { if (key && !out.some((x) => x.key === key)) out.push({ key, src }); };
+  parseMeds(p).meds.forEach((m) => add(rxKey(m.name), '目前用藥'));
+  medOrders(p).forEach((d) => { const ks = d.rx ? [rxKey(d.rx.name)] : detectDrugs(d.text); ks.forEach((k) => { if (k && !/停用|停止|D\/C/i.test(d.text)) add(k, '醫囑 ' + fmtT(d.t)); }); });
+  medOrders(p).forEach((d) => { if (/停用|停止|D\/C/i.test(d.text)) detectDrugs(d.text).forEach((k) => { const i = out.findIndex((x) => x.key === k); if (i >= 0) out.splice(i, 1); }); });
+  return out;
+}
+function egfrOf(p) {
+  const pan = labPanels(p).panels.slice().reverse().find((x) => x.vals.Cr != null); if (!pan) return null;
+  const cr = pan.vals.Cr, f = p.sex === '女', k = f ? 0.7 : 0.9, a = f ? -0.241 : -0.302;
+  const e = 142 * Math.pow(Math.min(cr / k, 1), a) * Math.pow(Math.max(cr / k, 1), -1.2) * Math.pow(0.9938, p.age) * (f ? 1.012 : 1);
+  return { egfr: Math.round(e), cr, md: pan.md };
+}
+function liverOf(p) {
+  if (MED_HEPATIC[p.id]) return { impaired: true, text: MED_HEPATIC[p.id] };
+  if (/肝硬化|肝炎|肝功能異常/.test((p.comorb || []).join(''))) return { impaired: true, text: (p.comorb || []).filter((c) => /肝/.test(c)).join('、') };
+  const pan = labPanels(p).panels.slice().reverse().find((x) => x.vals.AST != null || x.vals.ALT != null);
+  if (!pan) return { impaired: false, unknown: true, text: '近期無 AST／ALT' };
+  const ast = pan.vals.AST, alt = pan.vals.ALT; const hi = (ast || 0) > 120 || (alt || 0) > 123;
+  return { impaired: hi, text: 'AST ' + ast + '／ALT ' + alt + '（' + pan.md + '）' + (hi ? '，>3 倍正常上限' : '，正常') };
+}
+function rxDailyMg(rx) { const m = /([\d,]+(?:\.\d+)?)\s*(mg|g)\b/i.exec(rx.dose || ''); if (!m || /\//.test(rx.dose || '')) return null; const mg = parseFloat(m[1].replace(/,/g, '')) * (m[2].toLowerCase() === 'g' ? 1000 : 1); const n = FREQ_PER_DAY[rx.freq]; return n ? Math.round(mg * n) : null; }
+/* 單一藥品檢核：回傳 { findings:[{cat,sev,msg,suggest}], passes:[{cat,msg}], max } */
+function cdsCheck(p, key, rx, opts) {
+  const D = DRUG_DB[key]; const o = opts || {}; const F = [], OK = []; rx = rx || {};
+  const add = (cat, r) => { (Array.isArray(r) ? r.flat(2) : [r]).filter(Boolean).forEach((x) => { if (x.ok) OK.push({ cat, msg: x.ok }); else F.push(Object.assign({ cat }, x)); }); };
+  // 過敏
+  const al = MED_ALLERGY[p.id]; const alCls = al ? ALLERGEN_CLS.filter(([re]) => re.test(al)).map(([, c]) => c) : [];
+  const alF = [];
+  alCls.forEach((c) => { if (D.cls.includes(c)) alF.push({ sev: 3, msg: '病人對 ' + al + ' 過敏；' + key + ' 屬同類藥物' + (c === 'nsaid' ? '（Aspirin 誘發氣喘者 NSAID 交叉反應）' : '') }); ALLERGY_CROSS.forEach(([a, b, sev, msg]) => { if (a === c && D.cls.includes(b)) alF.push({ sev, msg: '病人對 ' + al + ' 過敏：' + msg }); }); });
+  if (alF.length) add('過敏', alF); else OK.push({ cat: '過敏', msg: al ? '病人對 ' + al + ' 過敏，與本藥無已知交叉' : '無已知藥物過敏' });
+  // 腎功能
+  const eg = egfrOf(p);
+  if (!eg) OK.push({ cat: '腎功能', msg: '近期無 Cr，請確認腎功能' });
+  else { const r = D.renal ? D.renal(eg.egfr, rx, p, eg.cr) : null; if (r && !r.ok) add('腎功能', r); else OK.push({ cat: '腎功能', msg: 'eGFR ' + eg.egfr + '（Cr ' + eg.cr + '・' + eg.md + '）' + (r && r.ok ? '：' + r.ok : '：不需調整') }); }
+  // 肝功能
+  const lv = liverOf(p); const hr = D.hepatic ? D.hepatic(lv, eg ? eg.egfr : null) : null;
+  if (hr) add('肝功能', Object.assign({}, hr, { msg: lv.text + '：' + hr.msg })); else OK.push({ cat: '肝功能', msg: lv.text + (lv.unknown ? '（若有肝病史請確認）' : '：不需調整') });
+  // 劑量
+  if (D.maxDaily) { const mx = D.maxDaily(p, lv, eg ? eg.egfr : null); const dd = rxDailyMg(rx); if (dd != null && dd > mx) { const per = FREQ_PER_DAY[rx.freq] || 1; const sd = Math.floor(mx / per / 50) * 50; add('劑量', { sev: dd > mx * 1.5 ? 3 : 2, msg: '每日總量 ' + dd.toLocaleString() + ' mg 超過上限 ' + mx.toLocaleString() + ' mg' + (rx.freq === 'prn' ? '（prn 以每 6 小時計）' : ''), suggest: sd > 0 ? { dose: sd + ' mg', freq: rx.freq } : null }); } else if (dd != null) OK.push({ cat: '劑量', msg: '每日總量 ' + dd.toLocaleString() + ' mg（上限 ' + mx.toLocaleString() + ' mg）' }); }
+  // 交互作用與重複
+  const act = activeRx(p).filter((x) => x.key !== key || !o.modifying);
+  const ia = [];
+  act.forEach(({ key: k2, src }) => {
+    if (k2 === key) { ia.push({ cat: '重複用藥', sev: 2, msg: key + ' 已在使用中（' + src + '）；調整劑量請寫「改為／加量／減量」' }); return; }
+    RX_IA.forEach(([a, b, sev, msg]) => { if ((rxHas(key, a) && rxHas(k2, b)) || (rxHas(key, b) && rxHas(k2, a))) ia.push({ cat: '交互作用', sev, msg: '與 ' + k2 + '（' + src + '）：' + msg }); });
+    Object.keys(RX_DUP).forEach((c) => { if (D.cls.includes(c) && DRUG_DB[k2].cls.includes(c)) ia.push({ cat: '重複用藥', sev: RX_DUP[c][0], msg: RX_DUP[c][1] + '：' + key + ' 與 ' + k2 + '（' + src + '）' }); });
+  });
+  if (ia.length) ia.forEach((x) => F.push(x)); else OK.push({ cat: '交互作用', msg: act.length ? '與目前用藥（' + act.map((x) => x.key).join('、') + '）無已知重要交互作用' : '目前無其他用藥' });
+  // 年齡／疾病
+  if (D.age) add('年齡／疾病', D.age(p));
+  const max = F.reduce((m, x) => Math.max(m, x.sev), 0);
+  return { key, rx, findings: F.sort((a, b) => b.sev - a.sev), passes: OK, max, eg, lv };
+}
+function cdsCount(list) { const c = { 3: 0, 2: 0, 1: 0 }; list.forEach((r) => r.findings.forEach((f) => { c[f.sev]++; })); return c; }
+function cdsSumHtml(list) { const c = cdsCount(list); const parts = [3, 2, 1].filter((s) => c[s]).map((s) => '<span class="cds-pill s' + s + '">' + SEV_LABEL[s] + ' ' + c[s] + '</span>'); return parts.length ? parts.join('') : '<span class="cds-pill ok">✓ 檢核通過</span>'; }
+function cdsResultHtml(r, withPass) {
+  const D = DRUG_DB[r.key]; let h = '<div class="cds-drug"><b>' + esc(r.key) + '</b> ' + esc([r.rx.dose, r.rx.route, r.rx.freq && (MED_FREQ[r.rx.freq] || r.rx.freq)].filter(Boolean).join(' ')) + ' <span class="faint">' + esc(D.grp) + '</span></div>';
+  h += r.findings.map((f) => '<div class="cds-f s' + f.sev + '"><span class="cds-b">' + SEV_LABEL[f.sev] + '</span><div><b>' + esc(f.cat) + '</b>　' + esc(f.msg) + (f.suggest ? ' <button class="btn xs" type="button" data-act="rx-apply" data-dose="' + esc(f.suggest.dose || '') + '" data-freq="' + esc(f.suggest.freq || '') + '">套用建議劑量</button>' : '') + '</div></div>').join('');
+  if (withPass) h += r.passes.map((x) => '<div class="cds-f ok"><span class="cds-b">✓</span><div><b>' + esc(x.cat) + '</b>　' + esc(x.msg) + '</div></div>').join('');
+  return h;
+}
+function cdsGateFields(list) { const c = cdsCount(list); return (c[3] ? '<div class="field" style="margin-top:8px"><span><b class="cds-red">有禁忌警示</b>：仍要開立請填寫覆寫理由（會記錄並通知護理端）</span><textarea id="rx-reason" rows="2" placeholder="例：過去曾使用無不良反應；已與病人及家屬說明並監測"></textarea></div>' : '') + (c[2] ? '<label class="cds-ack"><input type="checkbox" id="rx-ack"> 我已了解上述警告，評估後仍要開立</label>' : ''); }
+function cdsGateOk(list) { const c = cdsCount(list); const reason = (document.getElementById('rx-reason') || {}).value || ''; const ack = (document.getElementById('rx-ack') || {}).checked; if (c[3] && !reason.trim()) { toast('有禁忌警示：請填寫覆寫理由，或返回修改'); return null; } if (c[2] && !ack) { toast('請勾選「已了解上述警告」'); return null; } return { reason: reason.trim(), c }; }
+function cdsSuffix(list, gate) { const c = cdsCount(list); if (!c[3] && !c[2] && !c[1]) return '〔用藥檢核：通過〕'; if (!c[3] && !c[2]) return '〔用藥檢核：注意 ' + c[1] + '〕'; return '〔已覆寫用藥警示：' + [3, 2].filter((s) => c[s]).map((s) => SEV_LABEL[s] + ' ' + c[s]).join('、') + (gate && gate.reason ? '；理由：' + gate.reason : '') + '〕'; }
+/* 存檔：有警示時先記「用藥檢核」明細，再記「醫囑」（醫囑在最後，護理端以醫囑判斷新醫囑） */
+function cdsCommit(pid, text, who, list, gate, rx) {
+  if (list.length && list.some((r) => r.findings.length)) decide(pid, '用藥檢核', list.map((r) => r.key + '：' + (r.findings.length ? r.findings.map((f) => SEV_LABEL[f.sev] + '〔' + f.cat + '〕' + f.msg).join('；') : '通過')).join('｜') + (gate && gate.reason ? '｜覆寫理由：' + gate.reason : ''), who);
+  decide(pid, '醫囑', text + (list.length ? cdsSuffix(list, gate) : ''), who);
+  if (rx) { const arr = state.decisions[pid]; arr[arr.length - 1].rx = rx; save(); }
+  closeModal(); const c = cdsCount(list);
+  toast('醫囑已開立（示範）' + (list.length ? '・用藥檢核：' + (c[3] || c[2] ? '已覆寫 ' + (c[3] + c[2]) + ' 項警示' : c[1] ? '注意 ' + c[1] + ' 項' : '通過') : '') + '；護理端與戰情室同步顯示'); render();
+}
+/* 常用醫囑／自行輸入：文字中有藥名就檢核；有禁忌或警告先跳警示 */
+let cdsPending = null;
+function cdsGate(pid, text, who) {
+  const p = P(pid); const keys = detectDrugs(text); const stop = /停用|停止|D\/C/i.test(text); const modifying = /減量|加量|調整|改為|續用|維持/.test(text);
+  const act = activeRx(p).map((x) => x.key);
+  const list = stop ? [] : keys.map((k) => cdsCheck(p, k, rxFromText(text, k), { modifying: modifying && act.includes(k) }));
+  if (list.some((r) => r.max >= 2)) { cdsPending = { pid, text, who, list }; openModal('用藥安全警示・' + p.name + '（' + p.id + '）', '<div class="cds-alert"><div class="cds-order">醫囑：' + esc(text) + '</div><div class="cds-sum">' + cdsSumHtml(list) + '</div>' + list.map((r) => cdsResultHtml(r, true)).join('') + cdsGateFields(list) + '<div class="btn-row" style="margin-top:10px"><button class="btn sm" type="button" data-act="rx-gate-back">返回修改</button><button class="btn sm primary" type="button" data-act="rx-gate-force">仍要開立</button></div><div class="note" style="margin-top:6px">示範規則；正式版由 HIS 用藥安全檢核回傳（過敏、肝腎功能、交互作用、重複、劑量）。</div></div>'); return; }
+  cdsCommit(pid, text, who, list, null, null);
+}
+/* 開立用藥表單：選藥 → 帶入常用劑量 → 即時檢核 → 送出 */
+let rxCtx = null;
+function rxPatientCtx(p) {
+  const eg = egfrOf(p), lv = liverOf(p), act = activeRx(p);
+  return '<div class="rx-ctx"><div>' + medAllergyHtml(p) + '</div><div class="rx-ctx-g"><span><b>腎功能</b> ' + (eg ? 'eGFR ' + eg.egfr + '（Cr ' + eg.cr + '・' + eg.md + '）' : '近期無 Cr') + '</span><span><b>肝功能</b> ' + esc(lv.text) + '</span><span><b>年齡</b> ' + p.age + ' 歲 ' + p.sex + (p.comorb && p.comorb.length ? '・' + esc(p.comorb.join('、')) : '') + '</span><span><b>目前用藥</b> ' + (act.length ? act.map((x) => esc(x.key)).join('、') : '無') + '</span></div></div>';
+}
+function openRxForm(pid, who) {
+  const p = P(pid); if (!p) return; rxCtx = { pid, who, list: [] };
+  const grps = {}; Object.keys(DRUG_DB).forEach((k) => { (grps[DRUG_DB[k].grp] = grps[DRUG_DB[k].grp] || []).push(k); });
+  openModal('開立用藥・' + p.name + '（' + p.id + '）', '<div id="rx-form">' + rxPatientCtx(p) +
+    '<div class="fgrid rx-g"><div class="field" style="grid-column:1/-1"><span>藥品</span><select id="rx-drug"><option value="">請選擇藥品</option>' + Object.keys(grps).map((g) => '<optgroup label="' + g + '">' + grps[g].map((k) => '<option value="' + esc(k) + '">' + esc(k) + '</option>').join('') + '</optgroup>').join('') + '</select></div>' +
+    '<div class="field"><span>劑量</span><input id="rx-dose"></div><div class="field"><span>途徑</span><select id="rx-route">' + ['IV', 'PO', 'SC', 'IM'].map((r) => '<option>' + r + '</option>').join('') + '</select></div>' +
+    '<div class="field"><span>頻次</span><select id="rx-freq">' + RX_FREQS.map((f) => '<option value="' + f + '">' + f + '（' + (MED_FREQ[f] || f) + '）</option>').join('') + '</select></div><div class="field"><span>適應症／備註</span><input id="rx-ind" placeholder="例：膝關節疼痛"></div></div>' +
+    '<div id="cds-box" class="cds-box"><div class="note">選擇藥品後即時檢核過敏、肝腎功能、交互作用、重複用藥與劑量。</div></div><div id="rx-gate"></div>' +
+    '<div class="btn-row" style="margin-top:10px"><button class="btn sm" type="button" data-act="rx-cancel">取消</button><button class="btn sm primary" type="button" data-act="rx-submit">送出醫囑</button></div>' +
+    '<div class="note" style="margin-top:6px">示範規則，非完整藥物資料庫；正式版由 HIS 用藥安全檢核（院內藥物資料庫、藥劑部規則）回傳。</div></div>');
+}
+function rxRead() { const g = (id) => (document.getElementById(id) || {}).value || ''; return { name: g('rx-drug'), dose: g('rx-dose').trim(), route: g('rx-route'), freq: g('rx-freq'), ind: g('rx-ind').trim() }; }
+function rxRefresh() {
+  if (!rxCtx) return; const p = P(rxCtx.pid); const rx = rxRead(); const box = document.getElementById('cds-box'), gate = document.getElementById('rx-gate'); if (!box) return;
+  if (!rx.name) { rxCtx.list = []; box.innerHTML = '<div class="note">選擇藥品後即時檢核過敏、肝腎功能、交互作用、重複用藥與劑量。</div>'; gate.innerHTML = ''; return; }
+  const r = cdsCheck(p, rx.name, rx, {}); rxCtx.list = [r];
+  box.innerHTML = '<div class="cds-sum">用藥安全檢核 ' + cdsSumHtml([r]) + '</div>' + cdsResultHtml(r, true);
+  const prevReason = (document.getElementById('rx-reason') || {}).value || '', prevAck = !!(document.getElementById('rx-ack') || {}).checked; /* 重算時保留已填的理由與勾選 */
+  gate.innerHTML = cdsGateFields([r]);
+  const rs = document.getElementById('rx-reason'); if (rs) rs.value = prevReason; const ak = document.getElementById('rx-ack'); if (ak) ak.checked = prevAck;
+}
+document.addEventListener('change', (e) => {
+  if (!e.target.closest || !e.target.closest('#rx-form')) return;
+  if (e.target.id === 'rx-drug') { const D = DRUG_DB[e.target.value]; if (D) { document.getElementById('rx-dose').value = D.dose; document.getElementById('rx-route').value = D.route; document.getElementById('rx-freq').value = D.freq; } }
+  if (['rx-ack', 'rx-reason', 'rx-ind', 'rx-dose'].includes(e.target.id)) return; /* 劑量欄已由 input 即時重算；離開欄位不再重繪，避免按鈕在點擊中被換掉 */
+  rxRefresh();
+});
+document.addEventListener('input', (e) => { if (e.target.id === 'rx-dose') rxRefresh(); });
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-act^="rx-"]'); if (!b) return; e.preventDefault(); e.stopPropagation();
+  const act = b.dataset.act;
+  if (act === 'rx-new') { openRxForm(b.dataset.p, rptWho()); return; }
+  if (act === 'rx-cancel') { rxCtx = null; closeModal(); return; }
+  if (act === 'rx-apply') { if (b.dataset.dose) document.getElementById('rx-dose').value = b.dataset.dose; if (b.dataset.freq) document.getElementById('rx-freq').value = b.dataset.freq; rxRefresh(); toast('已套用建議劑量'); return; }
+  if (act === 'rx-submit') {
+    if (!rxCtx) return; const rx = rxRead(); if (!rx.name) { toast('請選擇藥品'); return; } if (!rx.dose) { toast('請填寫劑量'); return; }
+    rxRefresh(); const g = cdsGateOk(rxCtx.list); if (!g) return;
+    const text = rx.name + ' ' + rx.dose + ' ' + rx.route + ' ' + (MED_FREQ[rx.freq] || rx.freq) + (rx.ind ? '（' + rx.ind + '）' : '') + '（HIS・示範）';
+    const c = rxCtx; rxCtx = null; cdsCommit(c.pid, text, c.who, c.list, g, { name: rx.name, dose: rx.dose, route: rx.route, freq: rx.freq });
+    return;
+  }
+  if (act === 'rx-gate-back') { const c = cdsPending; cdsPending = null; if (c) openOrderChoice(c.pid, c.who); else closeModal(); return; }
+  if (act === 'rx-gate-force') { const c = cdsPending; if (!c) return; const g = cdsGateOk(c.list); if (!g) return; cdsPending = null; cdsCommit(c.pid, c.text, c.who, c.list, g, null); return; }
 }, true);
 
 /* ===================== 渲染與事件 ===================== */
@@ -5674,6 +5920,23 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
 #med-sec .med-list{border:1px solid var(--line-soft);border-radius:8px;padding:2px 10px;margin:6px 0}
 .med-sub{font-weight:700;font-size:15.5px;margin:10px 0 2px}.med-sub .faint{font-weight:400;font-size:13.5px;margin-left:4px}
 .ord-unread{color:var(--accent-ink)}.ord-read{color:var(--green)}
+/* 開立用藥安全檢核 */
+.med-ctx{font-size:14px;color:var(--ink-2);margin:4px 0 2px}
+.rx-ctx{border:1px solid var(--line-soft);border-radius:8px;padding:6px 8px;margin-bottom:8px;background:var(--surface-2)}.rx-ctx .med-allergy{margin-bottom:4px}
+.rx-ctx-g{display:flex;flex-direction:column;gap:2px;font-size:14.5px;line-height:1.4}.rx-ctx-g b{color:var(--ink-3);font-weight:600;margin-right:4px}
+.rx-g{margin-bottom:8px}.rx-g select,.rx-g input{width:100%;box-sizing:border-box}
+.cds-box,.cds-alert{display:flex;flex-direction:column;gap:4px}.cds-order{font-size:15.5px;margin-bottom:4px}
+.cds-sum{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:600;font-size:15px;margin:2px 0 4px}
+.cds-pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:13.5px;font-weight:700;border:1px solid currentColor}
+.cds-pill.s3{color:#fff;background:var(--red);border-color:var(--red)}.cds-pill.s2{color:var(--yellow);background:var(--yellow-soft)}.cds-pill.s1{color:var(--dq);background:var(--dq-soft)}.cds-pill.ok{color:var(--green);background:var(--green-soft)}
+.cds-drug{font-size:15.5px;margin-top:4px}
+.cds-f{display:grid;grid-template-columns:44px 1fr;gap:8px;align-items:start;padding:6px 8px;border-radius:8px;font-size:15px;line-height:1.45}
+.cds-f .cds-b{display:inline-block;text-align:center;border-radius:6px;font-size:12.5px;font-weight:700;padding:1px 0}
+.cds-f.s3{background:var(--red-soft)}.cds-f.s3 .cds-b{background:var(--red);color:#fff}
+.cds-f.s2{background:var(--yellow-soft)}.cds-f.s2 .cds-b{background:var(--yellow);color:#fff}
+.cds-f.s1{background:var(--dq-soft)}.cds-f.s1 .cds-b{background:var(--dq);color:#fff}
+.cds-f.ok{padding:3px 8px}.cds-f.ok .cds-b{color:var(--green)}.cds-f.ok{color:var(--ink-2)}
+.cds-red{color:var(--red)}.cds-ack{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:15.5px}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -5691,7 +5954,7 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1794191912369') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1794193230126') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
