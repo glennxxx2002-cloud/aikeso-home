@@ -3351,6 +3351,7 @@ function caseCard(p, ctx) {
   if ((m.symptoms || []).length || (m.danger || []).length) h += '<div class="sec"><h4>症狀回報</h4><div class="chip-row">' + (m.danger || []).map((s) => '<span class="pill red">' + esc(s) + '</span>').join('') + (m.symptoms || []).map((s) => '<span class="tag">' + esc(s) + '</span>').join('') + (m.photo ? '<span class="tag acc">傷口照片已上傳</span>' : '') + '</div></div>';
   h += '<div class="sec"><h4>警示與工作狀態</h4>' + (open.length ? open.map((a) => '<div class="al stripe ' + a.level + '" style="margin-bottom:8px"><div>' + stBadge(a) + '</div><div><div class="who">' + esc(a.text) + '</div><div class="meta"><span>' + a.id + '</span><span>' + fmtT(a.at) + '</span><span>' + esc(a.rule) + '</span><span>負責 ' + staff(a.owner) + '</span></div>' + statusFlow(a) + '</div><div></div><div class="acts">' + alertActions(a, who) + '</div></div>' + '<details class="acc"><summary>處置紀錄（' + a.log.length + '）</summary><div class="acc-b">' + alertLogHtml(a) + '</div></details>').join('') : '<div class="note">目前沒有未解除的警示。</div>') + '</div>';
   h += '<div class="sec"><h4>個別目標與界線</h4>' + targetsList(p) + '</div>';
+  h += caseMedSection(p, ctx);
   h += '<div class="sec"><h4>治療與檢驗</h4><dl class="kv"><dt>治療</dt><dd>' + esc(p.tx) + '</dd><dt>檢驗</dt><dd>' + esc(p.labs) + '</dd></dl></div>';
   h += reportsSection(p);
   h += '<div class="sec"><h4>AI 病情整理（深度分析流・草稿）</h4>' + aiSummary(p) + '<div class="btn-row" style="margin-top:8px"><button class="btn sm" data-act="adopt" data-p="' + p.id + '" data-who="' + who + '">醫師確認病情脈絡</button><button class="btn sm" data-act="ddx" data-p="' + p.id + '">開啟疾病鑑別</button></div></div>';
@@ -4920,13 +4921,29 @@ function medModalHtml(p) {
   let h = '<div class="med-modal">' + medAllergyHtml(p);
   h += '<div class="rpt-h" style="margin-top:10px"><b>目前用藥</b><span class="faint">' + meds.length + ' 項・HIS 處方（示範）</span></div>' + (meds.length ? meds.map((x) => medRowHtml(p, x)).join('') : '<div class="note">治療欄位沒有可辨識的藥品，請以 HIS 處方為準。</div>');
   h += '<div class="rpt-h" style="margin-top:14px"><b>重要醫囑</b><span class="faint">' + ords.length + ' 項' + (fresh.length ? '・新醫囑 ' + fresh.length : '') + '</span></div>';
-  h += '<div class="ord-table">' + ords.map((o) => '<div class="ord-r' + (o.isNew ? ' new' : '') + (o.key ? ' key' : '') + '"><span class="tag' + (o.cat === '醫師醫囑' ? ' acc' : '') + '">' + esc(o.cat) + '</span><div>' + (o.isNew ? '<span class="pill new-order">新</span> ' : '') + esc(o.text) + (o.meta ? '<div class="faint" style="font-size:13.5px">' + esc(o.meta) + '</div>' : '') + '</div></div>').join('') + '</div>';
+  const rn = rptIsNurse();
+  h += '<div class="ord-table">' + ords.map((o) => '<div class="ord-r' + (o.isNew ? ' new' : '') + (o.key ? ' key' : '') + '"><span class="tag' + (o.cat === '醫師醫囑' ? ' acc' : '') + '">' + esc(o.cat) + '</span><div>' + (o.isNew ? '<span class="pill new-order">' + (rn ? '新' : '護理未讀') + '</span> ' : '') + esc(o.text) + (o.meta ? '<div class="faint" style="font-size:13.5px">' + esc(o.meta) + (o.cat === '醫師醫囑' && !o.isNew && !rn ? '・護理已讀' : '') + '</div>' : '') + '</div></div>').join('') + '</div>';
   if (fresh.length && rptIsNurse()) h += '<div class="btn-row" style="margin-top:10px"><button class="btn sm primary" type="button" data-act="med-ack" data-p="' + p.id + '">確認已讀新醫囑（' + fresh.length + '）</button></div>';
   if (p.medAckBy) h += '<div class="note" style="margin-top:6px">護理最近確認：' + esc(p.medAckBy) + '・' + fmtT(p.medAck) + '</div>';
   h += '<div class="note" style="margin-top:8px">示範：用藥由個案治療欄位解析、過敏為示範資料；正式版接 HIS 用藥與醫囑查詢 API（MedicationRequest、ServiceRequest）唯讀顯示，見資訊室需求單第 2 節第 1 層。</div></div>';
   return h;
 }
 function openMeds(pid) { const p = P(pid); if (!p) return; openModal('用藥與重要醫囑・' + p.name + '（' + p.id + '）', medModalHtml(p)); }
+/* 個案卡（醫師端個案畫面、戰情室抽屜、護理端個案卡共用）：「目前用藥與重要醫囑」區塊。
+   醫師醫囑列出護理已讀／未讀（閉環）；醫師端多一顆「開立醫囑（HIS）」，護理端有新醫囑時多「確認已讀」。 */
+function caseMedSection(p, ctx) {
+  const { meds } = parseMeds(p); const ords = importantOrders(p); const docOrd = ords.filter((o) => o.cat === '醫師醫囑'); const fresh = medNewOrders(p);
+  const keyCats = ['通知醫師', '監測', '氧療', '護理醫囑', '檢驗', '治療備註', '個別目標'];
+  let h = '<div class="sec" id="med-sec"><h4>目前用藥與重要醫囑</h4>' + medAllergyHtml(p);
+  h += '<div class="med-list">' + (meds.length ? meds.map((x) => medRowHtml(p, x)).join('') : '<div class="note">治療欄位沒有可辨識的藥品，請以 HIS 處方為準。</div>') + '</div>';
+  if (docOrd.length) h += '<div class="med-sub">醫師醫囑 <span class="faint">' + docOrd.length + ' 則' + (fresh.length ? '・護理未讀 ' + fresh.length : '・護理皆已讀') + '</span></div><div class="ord-table">' + docOrd.slice(0, 5).map((o) => '<div class="ord-r' + (o.isNew ? ' new' : '') + '"><span class="tag acc">醫囑</span><div>' + esc(o.text) + '<div class="faint" style="font-size:13.5px">' + esc(o.meta) + '・' + (o.isNew ? '<b class="ord-unread">護理未讀</b>' : '<span class="ord-read">護理已讀' + (p.medAckBy ? '（' + esc(p.medAckBy) + ' ' + fmtT(p.medAck) + '）' : '') + '</span>') + '</div></div></div>').join('') + '</div>';
+  h += '<div class="med-sub">重要醫囑</div><div class="ord-table">' + ords.filter((o) => keyCats.includes(o.cat)).map((o) => '<div class="ord-r' + (o.key ? ' key' : '') + '"><span class="tag">' + esc(o.cat) + '</span><div>' + esc(o.text) + (o.meta ? '<div class="faint" style="font-size:13.5px">' + esc(o.meta) + '</div>' : '') + '</div></div>').join('') + '</div>';
+  h += '<div class="btn-row" style="margin-top:8px"><button class="btn sm" type="button" data-act="med-open" data-p="' + p.id + '">完整用藥與醫囑</button>' +
+    (ctx === 'doc' ? '<button class="btn sm primary" type="button" data-act="order" data-p="' + p.id + '">開立醫囑（HIS）</button>' : '') +
+    (ctx === 'rn' && fresh.length ? '<button class="btn sm primary" type="button" data-act="med-ack" data-p="' + p.id + '">確認已讀新醫囑（' + fresh.length + '）</button>' : '') + '</div>';
+  h += '<div class="note" style="margin-top:6px">示範：用藥由治療欄位解析、過敏為示範資料；正式版接 HIS 用藥與醫囑查詢 API 唯讀顯示。</div></div>';
+  return h;
+}
 /* 醫師端「開立醫囑（HIS）」：依路徑列常用醫囑，或自行輸入 */
 function openOrderChoice(pid, who) {
   const p = P(pid); if (!p) return; const opts = (ORDER_TEMPLATES[p.pathway] || []).concat(['其他（自行輸入）']);
@@ -5703,6 +5720,10 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
 .ord-list{margin:6px 0 8px;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:14.5px;line-height:1.4}
 .ord-table{display:flex;flex-direction:column}.ord-r{display:grid;grid-template-columns:88px 1fr;gap:8px;padding:6px 0;border-top:1px solid var(--line-soft);font-size:15.5px;line-height:1.45}
 .ord-r .tag{justify-self:start;align-self:start}.ord-r.new{background:var(--accent-soft);border-radius:6px;padding:6px}.ord-r.key>div{color:var(--red);font-weight:600}
+/* 個案卡：目前用藥與重要醫囑 */
+#med-sec .med-list{border:1px solid var(--line-soft);border-radius:8px;padding:2px 10px;margin:6px 0}
+.med-sub{font-weight:700;font-size:15.5px;margin:10px 0 2px}.med-sub .faint{font-weight:400;font-size:13.5px;margin-left:4px}
+.ord-unread{color:var(--accent-ink)}.ord-read{color:var(--green)}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -5720,7 +5741,7 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1794191311890') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1794191912369') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
