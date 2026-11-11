@@ -5204,6 +5204,22 @@ document.addEventListener('click', (e) => {
   if (act === 'rx-gate-force') { const c = cdsPending; if (!c) return; const g = cdsGateOk(c.list); if (!g) return; cdsPending = null; cdsCommit(c.pid, c.text, c.who, c.list, g, null); return; }
 }, true);
 
+/* ===================== 病人 3D 地圖專頁（map.html） =====================
+   map.html 與戰情室是同一份程式，頁首多一行 window.__MAP_ONLY = true：登入後整頁只顯示「病人 3D 地圖分佈」，
+   不顯示頂欄、KPI、清單、返院距離排序與其他卡片。資料與戰情室同步（燈號、紅色待接手閃爍即時更新），
+   地圖依視窗大小自動放大；點標記仍可開個案卡。 */
+function mapOnlyView() { return '<div class="map-only-view">' + geoMap() + '</div>'; }
+/* 依舞台大小縮放地圖平面 */
+function mapFit() {
+  const st = document.getElementById('geo-stage'); const pl = st && st.querySelector('.geo-plane'); if (!pl) return;
+  const s = Math.max(0.5, Math.min(st.clientWidth / 600, st.clientHeight / 640, 1.8)); /* 寬以 600、高以 640 為基準：大螢幕整圈放得下，手機用滿寬度 */
+  pl.style.scale = s.toFixed(3);
+}
+if (window.__MAP_ONLY) {
+  document.documentElement.classList.add('map-only');
+  window.addEventListener('resize', () => { try { mapFit(); } catch (e) { } });
+}
+
 /* ===================== 渲染與事件 ===================== */
 let drawerPid = null;
 function render() {
@@ -5211,8 +5227,9 @@ function render() {
   document.querySelectorAll('.seg [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === state.tab)));
   const v = document.getElementById('view');
   const y = v.scrollTop;
-  v.innerHTML = state.tab === 'war' ? renderWar() : state.tab === 'doc' ? renderDoc() : state.tab === 'rn' ? renderRn() : renderPt();
+  v.innerHTML = window.__MAP_ONLY ? mapOnlyView() : state.tab === 'war' ? renderWar() : state.tab === 'doc' ? renderDoc() : state.tab === 'rn' ? renderRn() : renderPt();
   v.scrollTop = y;
+  if (window.__MAP_ONLY) mapFit();
   if (drawerPid && document.getElementById('drawer').classList.contains('open')) { const p = P(drawerPid) || state.closed.find((x) => x.id === drawerPid); if (p) document.getElementById('drawer-body').innerHTML = patientDetail(p); }
   save();
 }
@@ -5937,6 +5954,16 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
 .cds-f.s1{background:var(--dq-soft)}.cds-f.s1 .cds-b{background:var(--dq);color:#fff}
 .cds-f.ok{padding:3px 8px}.cds-f.ok .cds-b{color:var(--green)}.cds-f.ok{color:var(--ink-2)}
 .cds-red{color:var(--red)}.cds-ack{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:15.5px}
+/* 病人 3D 地圖專頁（map.html）：只留地圖，舞台填滿視窗 */
+html.map-only .topbar,html.map-only .geo-side,html.map-only .geo .tw-foot{display:none!important}
+html.map-only body{background:#061827}
+html.map-only #view{padding:12px max(12px,env(safe-area-inset-right,0px)) 12px max(12px,env(safe-area-inset-left,0px));height:100%;overflow:auto;box-sizing:border-box}
+html.map-only .map-only-view .geo{margin:0}
+html.map-only .geo .geo-wrap{grid-template-columns:1fr}
+html.map-only .geo-stage{height:calc(100vh - 130px);height:calc(100dvh - 130px);min-height:380px}
+@media (max-width:600px){html.map-only .geo-stage{height:calc(100vw + 60px);min-height:380px}}
+html.map-only .geo-plane{top:52%}
+@media (max-width:600px){html.map-only .geo .tw-heading p{display:none}}
 </style>
 <script>
 /* ===================== 跨網址同步：Google 試算表當共用後端 =====================
@@ -5954,7 +5981,7 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1794193230126') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1794365487419') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
   /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
@@ -6061,7 +6088,7 @@ table.rpt-tbl td.rpt-H{color:var(--red);font-weight:700}table.rpt-tbl td.rpt-L{c
     return out.filter((x) => Date.now() - Date.parse(x.m.t) < 10 * 60000);
   }
   function announceMeasurements(list) {
-    if (!list.length || typeof toast !== 'function' || !/^(war|doc)$/.test(roleNow())) return;
+    if (!list.length || typeof toast !== 'function' || !/^(war|doc)$/.test(roleNow()) || window.__MAP_ONLY) return; /* 地圖專頁不跳量測提示 */
     const one = (x) => { const m = x.m; return x.p.name + '（床 ' + (x.p.bed || '—') + '）新量測・' + (m.source || '') + '：BP ' + m.sbp + '/' + m.dbp + '、HR ' + m.hr + '、SpO₂ ' + m.spo2 + '%、T ' + (typeof m.temp === 'number' ? m.temp.toFixed(1) : m.temp) + (m.rr ? '、RR ' + m.rr : ''); };
     toast('📈 ' + list.slice(-3).map(one).join('｜'), 7000);
     window.__lastNewMs = list.map((x) => x.p.id);

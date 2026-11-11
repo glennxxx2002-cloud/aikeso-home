@@ -8,5 +8,6 @@
 | 醫師端 | https://glennxxx2002-cloud.github.io/aikeso-home/doc.html | D13495、D102 |
 | 護理端 | https://glennxxx2002-cloud.github.io/aikeso-home/rn.html | N002–N004 |
 | 病人端 | https://glennxxx2002-cloud.github.io/aikeso-home/pt.html?bed=V01（V01–V09） | 床號已帶入 |
+| 病人 3D 地圖（只有地圖，大螢幕用） | https://glennxxx2002-cloud.github.io/aikeso-home/map.html | 密碼（同戰情室） |
 
 所有病人皆為虛構示範資料。
