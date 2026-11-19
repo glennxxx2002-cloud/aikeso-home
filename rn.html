@@ -6032,7 +6032,7 @@ html.map-only .geo-plane{top:52%}
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1795053241059') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1795056936591') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   /* 輪詢節奏（從這次開始讀到下次開始讀）：任何裝置有變更後 3 分鐘內每 1 秒；之後每 2.5 秒；15 分鐘都沒有任何變更時每 5 秒。
      在線裝置多時自動放慢（有變更時每台 80 ms、平時每台 150 ms 起算），避免同時佔用太多後端執行數；讀取本身花的時間會從等待時間扣掉。 */
@@ -6100,16 +6100,29 @@ html.map-only .geo-plane{top:52%}
 
   /* ---- 通道 A：後端 API（任何瀏覽器） ---- */
   const sig = () => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(12000) : undefined;
-  const apiErr = (e) => { if (e && e.code) return e; if (e && e.name === 'TimeoutError') return { code: 'timeout', message: String(e) }; return { code: 'network', message: String(e) }; };
+  const isAbort = (e) => !!e && (e.name === 'TimeoutError' || e.name === 'AbortError');
+  const apiErr = (e) => { if (isAbort(e)) return { code: 'timeout', message: String(e) }; if (e && typeof e.code === 'string') return e; return { code: 'network', message: String(e) }; }; /* 逾時的 DOMException 自帶數字 code（23），要先判斷名稱 */
+  /* 讀取：實測真實後端偶爾有一次請求卡住。單次讀取最多等 8 秒；超過「平常讀取時間的 2.5 倍」（至少 3.5 秒）還沒回來就再發一次，
+     誰先回來用誰，另一個取消。卡住的那一次不再讓這台裝置空等十幾秒收不到更新。 */
+  const READ_TIMEOUT = 8000, HEDGE_MIN = (window.__SYNC_HEDGE_MS && window.__SYNC_HEDGE_MS > 100) ? window.__SYNC_HEDGE_MS : 3500;
+  const hedgeAfter = () => Math.min(6000, Math.max(HEDGE_MIN, Math.round((window.__syncStats.readMs || 0) * 2.5)));
+  const attempt = (ms) => { const ac = (typeof AbortController === 'function') ? new AbortController() : null; const t = setTimeout(() => { if (!ac) return; try { ac.abort(new DOMException('timeout', 'TimeoutError')); } catch (e) { try { ac.abort(); } catch (x) { } } }, ms); return { signal: ac ? ac.signal : undefined, done: () => clearTimeout(t), cancel: () => { clearTimeout(t); if (ac) { try { ac.abort(); } catch (e) { } } } }; };
+  const readOnce = async (h) => {
+    let r; try { r = await fetch(apiUrl() + (apiUrl().includes('?') ? '&' : '?') + 'op=read&range=' + RANGE_ALL + '&token=' + encodeURIComponent(API_TOKEN) + '&_=' + Date.now() + Math.random().toString(36).slice(2, 5), { method: 'GET', redirect: 'follow', cache: 'no-store', signal: h.signal }); } catch (e) { throw apiErr(e); }
+    if (!r.ok) throw { code: 'api_http', message: 'HTTP ' + r.status };
+    let j; try { j = await r.json(); } catch (e) { throw isAbort(e) ? apiErr(e) : { code: 'api_http', message: '回應不是 JSON' }; }
+    if (j.error) throw { code: 'api_error', message: j.error };
+    return Array.isArray(j.values) ? j.values : [];
+  };
   const apiT = {
     kind: 'api', label: '後端 API',
-    read: async () => {
-      let r; try { r = await fetch(apiUrl() + (apiUrl().includes('?') ? '&' : '?') + 'op=read&range=' + RANGE_ALL + '&token=' + encodeURIComponent(API_TOKEN) + '&_=' + Date.now(), { method: 'GET', redirect: 'follow', cache: 'no-store', signal: sig() }); } catch (e) { throw apiErr(e); }
-      if (!r.ok) throw { code: 'api_http', message: 'HTTP ' + r.status };
-      let j; try { j = await r.json(); } catch (e) { throw { code: 'api_http', message: '回應不是 JSON' }; }
-      if (j.error) throw { code: 'api_error', message: j.error };
-      return Array.isArray(j.values) ? j.values : [];
-    },
+    read: () => new Promise((resolve, reject) => {
+      const hs = []; let settled = false, pending = 0, hedgeT = null;
+      const end = () => { settled = true; clearTimeout(hedgeT); hs.forEach((h) => h.cancel()); };
+      const go = () => { const h = attempt(READ_TIMEOUT); hs.push(h); pending++; readOnce(h).then((v) => { pending--; if (settled) return; end(); resolve(v); }, (e) => { pending--; h.done(); if (settled || pending > 0) return; end(); reject(e); }); };
+      hedgeT = setTimeout(() => { if (settled) return; window.__syncStats.hedged = (window.__syncStats.hedged || 0) + 1; log('read slow, sent a second one'); go(); }, hedgeAfter());
+      go();
+    }),
     write: async (range, values) => {
       let r; try { r = await fetch(apiUrl(), { method: 'POST', redirect: 'follow', cache: 'no-store', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ op: 'write', token: API_TOKEN, range, values }), signal: sig() }); } catch (e) { throw apiErr(e); }
       if (!r.ok) throw { code: 'api_http', message: 'HTTP ' + r.status };
@@ -6140,7 +6153,7 @@ html.map-only .geo-plane{top:52%}
     return null;
   }
 
-  let T = null, apiBroken = false, pollTimer = null, hbInterval = null, roomSet = false, stopped = false, casOK = false, lastReadMs = 0, failN = 0;
+  let T = null, apiBroken = false, pollTimer = null, hbInterval = null, roomSet = false, stopped = false, casOK = false, lastReadMs = 0, failN = 0, lastWriteAt = 0;
   /* 本機有還沒寫到試算表的變更（例如上一次寫入失敗）：不能被遠端內容直接取代，也不能顯示「已同步」 */
   const unsent = () => !!lastSeen && !timer && !writing && canon(state) !== lastSeen;
   /* 遺失更新的偵測與補回：沒有 cas 的通道（舊版後端、連接器）「先讀再寫」之間仍可能被另一台同時寫入蓋掉。
@@ -6211,8 +6224,13 @@ html.map-only .geo-plane{top:52%}
   };
   async function refreshNow(src) {
     if (!T || refreshing || Date.now() < backoffUntil) return; refreshing = true;
-    const t0 = performance.now();
-    try { const rows = await timed('readMs', () => T.read()); failN = 0; applyRemote(rowsToRemote(rows), src); }
+    const t0 = performance.now(), startedAt = Date.now();
+    try {
+      const rows = await timed('readMs', () => T.read()); failN = 0; const rm = rowsToRemote(rows);
+      /* 這次讀取是在本機最近一次寫入完成之前發出的，回來的版本又比本機舊：只是讀到寫入前的內容，不是「遠端落後」，略過（不可據此強制覆寫） */
+      if (rm.ver < localVer && lastWriteAt >= startedAt) { window.__syncStats.stale = (window.__syncStats.stale || 0) + 1; log('ignored a read that started before my last write (v' + rm.ver + ' < v' + localVer + ')'); }
+      else applyRemote(rm, src);
+    }
     catch (e) { log('read failed ' + ((e && e.code) || e)); onErr(e, '讀取'); }
     lastReadMs = performance.now() - t0; refreshing = false;
   }
@@ -6290,7 +6308,7 @@ html.map-only .geo-plane{top:52%}
     const newWid = () => 'w' + devId + tabId + (++wseq).toString(36);
     const finish = (mine, ver, at, wid, how) => {
       sent = overwrite ? null : { base: baseJson, mine, ver, at, wid, t: Date.now() };
-      lastSeen = mine; lastAt = at; lastWid = wid; saveVer(ver); failN = 0; window.__syncStats.pushed++; log('wrote v' + ver + ' (' + mine.length + ' chars, ' + how + ')'); setDot('ok', '已同步 ' + hhmmss() + '（已寫入・' + T.label + '・v' + ver + '）'); if (window.__syncPing) window.__syncPing();
+      lastSeen = mine; lastAt = at; lastWid = wid; saveVer(ver); lastWriteAt = Date.now(); failN = 0; window.__syncStats.pushed++; log('wrote v' + ver + ' (' + mine.length + ' chars, ' + how + ')'); setDot('ok', '已同步 ' + hhmmss() + '（已寫入・' + T.label + '・v' + ver + '）'); if (window.__syncPing) window.__syncPing();
       if (bc) { try { bc.postMessage({ ver, at, wid, baseTok, by: roleNow(), who: whoNow(), key: (typeof STORE_KEY === 'string' ? STORE_KEY : ''), build: Math.max(APP_BUILD, window.__remoteBuild || 0), json: mine, from: tabId }); } catch (e) { } }
     };
     try {
