@@ -320,7 +320,7 @@ body{overflow-x:hidden}
     <button role="tab" data-tab="war" aria-selected="true">戰情室</button>
     <button role="tab" data-tab="doc" aria-selected="false">醫師端 App</button>
     <button role="tab" data-tab="pt" aria-selected="false">病人端 App</button>
-    <button role="tab" data-tab="rn" aria-selected="false">到府派工 App</button>
+    <button role="tab" data-tab="rn" aria-selected="false">護理端 App</button>
   </div>
   <span class="clock" id="clock"></span>
   
@@ -3790,7 +3790,7 @@ function jobCard(j, full) {
 function renderRn() {
   const s = state.rn; const nurse = s.nurse; const jobs = jobsOf(nurse); const done = jobs.filter((j) => j.status === 3).length;
   const sel = '<select id="rn-sel" style="font-size:16.5px;padding:3px 6px;margin-left:auto">' + ['rn2', 'rn3', 'rn4'].map((k) => '<option value="' + k + '"' + (k === nurse ? ' selected' : '') + '>' + STAFF[k].name + '</option>').join('') + '</select>';
-  const top = '<div class="ph-top"><div class="ttl">到府派工 ' + sel + '</div><div class="sub">' + STAFF[nurse].name + '・訪視護理師・今日 ' + done + '/' + jobs.length + ' 完成・' + fmtClock(now()).slice(11) + '</div></div>';
+  const top = '<div class="ph-top"><div class="ttl">護理端 ' + sel + '</div><div class="sub">' + STAFF[nurse].name + '・訪視護理師・今日 ' + done + '/' + jobs.length + ' 完成・' + fmtClock(now()).slice(11) + '</div></div>';
   const lateN = jobs.filter(jobLate).length;
   const tabs = phoneTabs([{ k: 'route', i: 'list', l: '派工', badge: lateN || '' }, { k: 'job', i: 'clip', l: '到府紀錄' }, { k: 'supply', i: 'book', l: '領用' }, { k: 'safety', i: 'sos', l: '安全' }], s.screen, 'rn');
   let body = '';
@@ -3834,7 +3834,7 @@ function renderRn() {
       '<div class="pcard"><h3>行程定位 <span class="r">示範</span></h3><div class="note">目前位置：' + (jobs.find((j) => j.status === 1 || j.status === 2) ? esc(jobs.find((j) => j.status === 1 || j.status === 2).area) + '（前往／停留中）' : '指揮中心') + '；下一案 ' + (jobs.find((j) => j.status === 0) ? jobs.find((j) => j.status === 0).time + ' ' + esc(jobs.find((j) => j.status === 0).area) : '無') + '。逾時未到達或停留超過預期時，系統自動通知戰情室。</div></div>' +
       '<div class="pcard"><h3>今日三點打卡紀錄</h3>' + (allLogs.length ? '<div class="log">' + allLogs.map((l) => '<div class="e"><time>' + fmtT(l.t) + '</time><div><b>' + esc(l.who) + '</b>　' + esc(l.what) + '</div></div>').join('') + '</div>' : '<div class="empty">尚無打卡</div>') + '</div>';
   }
-  const side = '<div class="side card" style="padding:16px"><h3>到府派工 App・設計對照</h3><p>第三個 App（Phase 2）：訪視護理師與治療師使用。排程派工與路線導航、到府紀錄與電子表單、行程安全回報與定位、三點打卡與異常自動告警、耗材與藥品領用登錄。</p><ul><li>到府量測直接進入共用資料層，與病人端回傳走同一條規則判讀。</li><li>首訪（Tech Pack 架設與教學）完成後，轉銜檢核的「設備」項自動打勾。</li><li>逾時未到達會在戰情室「到府行動小組」卡片顯示。</li><li>認證派遣平台（Uber 模式）為 Phase 2–3 對外輸出的技術基礎。</li></ul><p class="ref">規劃書大綱 §5.4・AiKESO CareDispatch</p><div class="hr"></div><p><b>試試看：</b>切換到蔡護理師，張○○（已到達）→ 填寫到府紀錄並送出；或在醫師端「轉銜」完成一位收案後，回到這裡看新的首訪派工。</p></div>';
+  const side = '<div class="side card" style="padding:16px"><h3>護理端 App・設計對照</h3><p>第三個 App（Phase 2）：訪視護理師與治療師使用。排程派工與路線導航、到府紀錄與電子表單、行程安全回報與定位、三點打卡與異常自動告警、耗材與藥品領用登錄。</p><ul><li>到府量測直接進入共用資料層，與病人端回傳走同一條規則判讀。</li><li>首訪（Tech Pack 架設與教學）完成後，轉銜檢核的「設備」項自動打勾。</li><li>逾時未到達會在戰情室「到府行動小組」卡片顯示。</li><li>認證派遣平台（Uber 模式）為 Phase 2–3 對外輸出的技術基礎。</li></ul><p class="ref">規劃書大綱 §5.4・AiKESO CareDispatch</p><div class="hr"></div><p><b>試試看：</b>切換到蔡護理師，張○○（已到達）→ 填寫到府紀錄並送出；或在醫師端「轉銜」完成一位收案後，回到這裡看新的首訪派工。</p></div>';
   return '<div class="stage">' + phone(top, body, tabs) + side + '</div>';
 }
 function handleRnAction(btn) {
@@ -4052,7 +4052,7 @@ function fhirDownload(pid, kind) {
 
 /* ===================== 多網址共用：端別標籤、各端入口、線上裝置面板 =====================
    五個發布網址各自有登入頁，後端同一張 Google 試算表（見 sync-sheets 模組）。 */
-const ROLE_LABEL = { war: '戰情室', doc: '醫師端', pt: '病人端', rn: '到府派工・護理端' };
+const ROLE_LABEL = { war: '戰情室', doc: '醫師端', pt: '病人端', rn: '護理端' };
 const ENTRY_LINKS = {
   war: 'https://claude.ai/artifact/UJsuCTJpA6S1A5amLw2T7R',
   doc: 'https://claude.ai/artifact/U5k2MUV1FsiM2SKsLjcZ1K',
@@ -5360,10 +5360,10 @@ function promptText(title, ph, cb) { openModal(title, '<textarea id="pt-text" ro
 
 function aboutHtml() {
   return '<div style="font-size:18.5px;line-height:1.65">' +
-    '<p style="margin:0 0 8px"><b>這是什麼</b>：中國附醫虛擬醫院（AiKESO@Home）系統的可操作原型——<b>戰情室</b>（指揮中心看板）、<b>醫師端 App</b>（醫護端）、<b>病人端 App</b>（中國醫點通擴充模組）與<b>到府派工 App</b>（訪視護理師）共用同一份「病患旅程資料」，示範 HaH（在宅急症照護）病人從量測回傳、規則判讀、警示接手到解除的完整閉環。</p>' +
+    '<p style="margin:0 0 8px"><b>這是什麼</b>：中國附醫虛擬醫院（AiKESO@Home）系統的可操作原型——<b>戰情室</b>（指揮中心看板）、<b>醫師端 App</b>（醫護端）、<b>病人端 App</b>（中國醫點通擴充模組）與<b>護理端 App</b>（訪視護理師）共用同一份「病患旅程資料」，示範 HaH（在宅急症照護）病人從量測回傳、規則判讀、警示接手到解除的完整閉環。</p>' +
     '<p style="margin:0 0 8px"><b>時間（V3_12）</b>：時鐘為真實時間（台北），每 30 秒更新；回應時限、逾時、資料品質以真實時間計算。示範資料的「幾小時前」「今日 HH:MM」「日期」在載入時以現在換算，敘事相對關係不變。所有時間一律是真實時間，沒有時間位移。<br><b>示範資料</b>：9 位虛構病人（肺炎、泌尿道感染、皮膚軟組織感染、在家化療示範；心衰竭路徑 10/29 起暫停、Phase 2 重啟，資料與規則保留未啟用）。<b>A1 模組（11/03，示範）</b>：壓傷分期草稿、語音護理紀錄、化療副作用追蹤——AI 輸出皆為草稿，護理師確認才成紀錄；無真實模型，分期與語音解析為規則模擬，姓名以○○遮蔽，所有數值均為設計用途，非真實病歷。</p>' +
     '<p style="margin:0 0 8px"><b>判讀邏輯</b>：快速安全流以核定規則（規則引擎 ' + RULE_VERSION + '，不經 LLM）比較「出院基準 B0 ＋ 個別目標 ＋ 危急界線 ＋ 相對 B0 變化幅度」，輸出紅／黃／綠與獨立的「資料品質」燈號；病情燈號與工作狀態（待確認→已接手→處理中→待重評→已解除）分開；未解除警示保留，缺資料不變綠。深度分析流（AI 病情整理、兩軌鑑別、六段式衛教、交班摘要）在此以模板產生草稿，實際由 LLM 生成並經醫師確認。</p>' +
-    '<p style="margin:0 0 8px"><b>怎麼玩</b>：① 戰情室按「接手」處理紅色警示 → 選處理方式 → 處置後重評 → 解除；② 切到病人端，「量測」頁按「填入惡化示範值」送出，回到戰情室看新警示；③ 醫師端「轉銜」對候選病人做收案評估並建檔——新病人出現在戰情室、首訪自動派工；④ 醫師端產生六段式衛教並發布，再到病人端「衛教」查看；⑤ 到府派工 App 完成三點打卡與到府紀錄，量測同樣進入規則引擎；⑥ 綠燈且無警示的病人可由醫師結案，進入戰情室「結案後追蹤」並可登錄 14 天事件；「重設」回到初始狀態。狀態只存在您的瀏覽器。</p>' +
+    '<p style="margin:0 0 8px"><b>怎麼玩</b>：① 戰情室按「接手」處理紅色警示 → 選處理方式 → 處置後重評 → 解除；② 切到病人端，「量測」頁按「填入惡化示範值」送出，回到戰情室看新警示；③ 醫師端「轉銜」對候選病人做收案評估並建檔——新病人出現在戰情室、首訪自動派工；④ 醫師端產生六段式衛教並發布，再到病人端「衛教」查看；⑤ 護理端 App 完成三點打卡與到府紀錄，量測同樣進入規則引擎；⑥ 綠燈且無警示的病人可由醫師結案，進入戰情室「結案後追蹤」並可登錄 14 天事件；「重設」回到初始狀態。狀態只存在您的瀏覽器。</p>' +
     '<p style="margin:0"><b>對應文件</b>：虛擬醫院（AiKESO@Home）系統規劃書大綱 v0.1——§3 整體架構、§4 病人端、§5 醫師端、§6 戰情室；門檻與時限均為草案，待團隊核定（附錄 F）。</p></div>';
 }
 
@@ -5983,7 +5983,7 @@ html.map-only .geo-plane{top:52%}
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1795058228405') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1795065258263') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
   /* 輪詢節奏（從這次開始讀到下次開始讀）：任何裝置有變更後 3 分鐘內每 1 秒；之後每 2.5 秒；15 分鐘都沒有任何變更時每 5 秒。
      在線裝置多時自動放慢（有變更時每台 80 ms、平時每台 150 ms 起算），避免同時佔用太多後端執行數；讀取本身花的時間會從等待時間扣掉。 */
