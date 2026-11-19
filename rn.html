@@ -3537,7 +3537,7 @@ function renderWar() {
   h += '<div class="card"><div class="card-h"><h3>交班與報表</h3></div><div class="card-b btn-row"><button class="btn sm" data-open="handoff">交班摘要</button><button class="btn sm" data-open="daily">營運日報</button><button class="btn sm" data-open="quality">品質指標</button><button class="btn sm" data-open="rules">警示規則表</button><button class="btn sm" data-video-set="1">視訊設定</button></div></div>';
   h += '<div class="card" id="meet-card"><div class="card-h"><h3>視訊會議</h3><span class="sub">每位病人一場獨立的 Teams 會議</span></div><div class="card-b">' + meetPanel() + '</div></div>';
   h += '<div class="card" id="call-card"><div class="card-h"><h3>視訊邀請</h3><span class="sub">醫護邀請病人・病人來電先接戰情室，5 分鐘未接通轉醫師</span></div><div class="card-b">' + callsPanel() + '</div></div>';
-  h += '<div class="card" id="dev-card"><div class="card-h"><h3>裝置同步</h3><span class="sub">五個網址各自登入・後端同一張試算表・操作中 1.5 秒同步' + buildStamp() + '</span></div><div class="card-b">' + devicesPanel() + '</div></div>';
+  h += '<div class="card" id="dev-card"><div class="card-h"><h3>裝置同步</h3><span class="sub">五個網址各自登入・後端同一張試算表・有變更時每秒同步' + buildStamp() + '</span></div><div class="card-b">' + devicesPanel() + '</div></div>';
   h += '<div class="card" id="ptlink-card"><div class="card-h"><h3>病人連結（院外使用）</h3><span class="sub">每床一個連結・不需 Claude 帳號</span></div><div class="card-b">' + patientLinksPanel() + '</div></div>';
   h += '</div></div>';
   return h;
@@ -4122,7 +4122,7 @@ function devicesPanel() {
     '<div class="dev-qr-t">各端入口（claude.ai 網址，各自的登入頁，後端同一份）・手機掃碼進入</div>' + entryQrs() +
     '<div class="dev-qr-t" style="margin-top:10px">院外入口（GitHub Pages，不需 Claude 帳號；病人連結見下方卡片）</div><div class="entry-qrs">' + ['war', 'doc', 'rn'].map((r) => '<div class="entry-qr entry-' + r + '"><b>' + ROLE_LABEL[r] + '・院外</b>' + (typeof videoQr === 'function' ? videoQr(PUBLIC_LINKS[r]) : '') + '<small>' + PUBLIC_LINKS[r].replace('https://', '') + '</small></div>').join('') + '</div>' +
     '<div class="note" style="margin-top:6px">合一 App（選端後登入）：<span class="mono">' + ENTRY_LINKS.app + '</span>' + (window.__syncSheetUrl ? '・共用試算表：<a href="' + window.__syncSheetUrl + '" target="_blank" rel="noopener">開啟</a>（請勿手動編輯）' : '') + '</div>' +
-    '<div class="btn-row" style="margin-top:8px"><button type="button" class="btn xs" data-backend-set="1">後端設定（API 網址）</button><span class="note">通道：' + (window.__syncTransport === 'api' ? '後端 API' : window.__syncTransport === 'mcp' ? 'Google 試算表連接器' : '—') + '</span></div>';
+    '<div class="btn-row" style="margin-top:8px"><button type="button" class="btn xs" data-backend-set="1">後端設定（API 網址）</button><span class="note" id="sync-lat">通道：' + (window.__syncTransport === 'api' ? '後端 API' + (window.__syncCas ? '（單趟寫入）' : '') : window.__syncTransport === 'mcp' ? 'Google 試算表連接器' : '—') + ((window.__syncLatency && window.__syncLatency()) ? '・實測 ' + window.__syncLatency() : '') + '</span></div>';
 }
 window.__renderDevices = () => {
   const el = document.getElementById('dev-list'); if (el) el.innerHTML = devicesList();
@@ -6023,7 +6023,8 @@ html.map-only .geo-plane{top:52%}
      A. 後端 API（Google Apps Script 網頁應用程式，部署後把網址填進來）：任何瀏覽器都能用，病人不需要 Claude 帳號。
      B. Google Sheets 連接器（claude.ai 頁面內的 mcp 能力）：只有登入 claude.ai 且連接 Google 的裝置能用。
    有 API 網址就走 A，否則走 B；A 連不上（網路或瀏覽器限制）而 B 可用時自動改走 B。
-   本機操作先存本機，再推到試算表；其他網址每 5 秒拉一次（回到前景、同網址 room 通知時立刻拉）。
+   本機操作先存本機，0.12 秒內推到試算表；其他網址有變更時每 1 秒拉一次、平時每 2.5 秒（回到前景、恢復連線、同網址 room 通知、同一瀏覽器的其他分頁寫入時立刻更新）。
+   後端若為 v2（ping 回傳 v:2）改用單趟「比對版本再寫」（cas），省掉寫入前的那次讀取，也避免兩台同時寫互相覆蓋。
    每台裝置自己的畫面狀態（分頁、目前畫面、登入身分）不同步。 */
 (function () {
   const SHEET_ID = '19QZOWfNeNxHWayWx2_VaqI2sz_nAy0bBe0utYnx8S_I';
@@ -6031,13 +6032,20 @@ html.map-only .geo-plane{top:52%}
   const SERVER = 'Google Sheets';
   const API_URL_BAKED = 'https://script.google.com/macros/s/AKfycbw0Zn6R56j802ZpMl8wCmzSFpxVCacGf8qRYXVlogir5mSZoHRhpYlnb-HtDD6gaVA2/exec'; /* Apps Script 網頁應用程式（2026-10-30 部署） */
   const API_TOKEN = '4rOCSh4zkfHtB1Oy'; /* 與 Apps Script 內的 TOKEN 相同；示範用，正式版改為院方帳號授權 */
-  const APP_BUILD = Number('1794365487419') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
+  const APP_BUILD = Number('1795053241059') || 0; /* 建置時間：試算表記錄目前最新的版本，舊版頁面發現後自動更新 */
   const RANGE_ALL = 'A2:Z20', RANGE_STATE = 'A2:Z3', DEV_ROW0 = 5, DEV_ROWS = 16, CHUNK = 40000, COLS = 26;
-  const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 5000;
-  /* 有人在操作時加快：任何裝置寫入或讀到新版本後 2 分鐘內每 1.5 秒讀一次（護理到府量測、警示能在 2 秒內出現在戰情室與醫師端），閒置時回到 5 秒 */
-  const FAST_MS = Math.min((window.__SYNC_FAST_MS && window.__SYNC_FAST_MS > 300) ? window.__SYNC_FAST_MS : 1500, POLL_MS), FAST_WINDOW = 120000;
-  let fastUntil = 0; const goFast = () => { fastUntil = Date.now() + FAST_WINDOW; };
+  /* 輪詢節奏（從這次開始讀到下次開始讀）：任何裝置有變更後 3 分鐘內每 1 秒；之後每 2.5 秒；15 分鐘都沒有任何變更時每 5 秒。
+     在線裝置多時自動放慢（有變更時每台 80 ms、平時每台 150 ms 起算），避免同時佔用太多後端執行數；讀取本身花的時間會從等待時間扣掉。 */
+  const POLL_MS = (window.__SYNC_POLL_MS && window.__SYNC_POLL_MS > 500) ? window.__SYNC_POLL_MS : 2500;
+  const COLD_MS = Math.max(POLL_MS, 5000), COLD_AFTER = 15 * 60000;
+  const FAST_MS = Math.min((window.__SYNC_FAST_MS && window.__SYNC_FAST_MS > 300) ? window.__SYNC_FAST_MS : 1000, POLL_MS), FAST_WINDOW = 180000;
+  const PUSH_MS = 120; /* 操作後多久寫出（同一次操作內連續的 save() 併成一次） */
+  let fastUntil = 0, lastChange = Date.now(); const goFast = () => { fastUntil = Date.now() + FAST_WINDOW; lastChange = Date.now(); };
   window.__syncFast = () => Date.now() < fastUntil;
+  const onlineN = () => (window.__devices ? window.__devices.length : 1) || 1;
+  const cycleMs = () => Date.now() < fastUntil ? Math.max(FAST_MS, onlineN() * 80) : (Date.now() - lastChange > COLD_AFTER ? COLD_MS : Math.max(POLL_MS, onlineN() * 150));
+  window.__syncCadence = () => ({ fast: FAST_MS, idle: POLL_MS, cold: COLD_MS, push: PUSH_MS, now: cycleMs(), mode: Date.now() < fastUntil ? 'fast' : (Date.now() - lastChange > COLD_AFTER ? 'cold' : 'idle'), devices: onlineN() });
+  window.__syncTest = { fast: () => goFast(), idle: () => { fastUntil = 0; lastChange = Date.now(); }, cold: () => { fastUntil = 0; lastChange = Date.now() - COLD_AFTER - 1000; } }; /* 測試用：切換節奏 */
   const HEARTBEAT_MS = 30000, DEV_TTL = 90000;
   const UI_KEYS = ['tab', 'doc', 'pt', 'rn', 'filter', 'sort', 'now']; /* now 是每台裝置的真實時間，不同步；tOffset（+30 分）會同步 */
   const canon = (st) => { const o = {}; Object.keys(st).forEach((k) => { if (!UI_KEYS.includes(k)) o[k] = st[k]; }); return JSON.stringify(o); };
@@ -6062,10 +6070,14 @@ html.map-only .geo-plane{top:52%}
   window.__devId = devId; window.__since = window.__since || Date.now();
   window.__devices = null; /* null = 尚未讀到試算表 */
   window.__syncStats = { applied: 0, pushed: 0, polls: 0, pings: 0, errors: 0 };
+  /* 實測延遲（移動平均，毫秒）：readMs 讀取、writeMs 寫入；顯示在戰情室「裝置同步」卡與同步燈號提示 */
+  const ema = (k, ms) => { const st = window.__syncStats; st[k] = st[k] ? Math.round(st[k] * 0.7 + ms * 0.3) : Math.round(ms); };
+  const timed = async (k, fn) => { const t0 = performance.now(); const r = await fn(); ema(k, performance.now() - t0); return r; };
+  window.__syncLatency = () => { const st = window.__syncStats; const f = (ms) => (ms / 1000).toFixed(ms < 995 ? 2 : 1) + ' 秒'; return (st.readMs ? '讀取 ' + f(st.readMs) : '') + (st.writeMs ? (st.readMs ? '・' : '') + '寫入 ' + f(st.writeMs) : ''); };
   const LOG = window.__syncLog = []; const log = (m) => { LOG.push(hhmmss() + ' ' + m); if (LOG.length > 60) LOG.shift(); };
   let localVer = 0; try { localVer = Number(localStorage.getItem('aikeso-sync-ver') || 0) || 0; } catch (e) { }
   const saveVer = (v) => { localVer = v; try { localStorage.setItem('aikeso-sync-ver', String(v)); } catch (e) { } };
-  let lastSeen = '', writing = false, dirty = false, timer = null, refreshing = false, backoffUntil = 0;
+  let lastSeen = '', lastAt = 0, lastWid = '', writing = false, dirty = false, timer = null, refreshing = false, backoffUntil = 0; /* lastAt／lastWid：lastSeen 那一版的時間戳與寫入代號，和版本號一起當作 cas 的比對依據（兩台在同一毫秒寫入也分得出來） */
   const ERR_TEXT = {
     needs_reauth: 'Google Sheets 連線已過期：請到 claude.ai 設定 → 連接器重新連接 Google Sheets',
     server_not_connected: '此 claude.ai 帳號尚未連接 Google Sheets（設定 → 連接器）',
@@ -6105,6 +6117,15 @@ html.map-only .geo-plane{top:52%}
       if (j.error) throw { code: 'api_error', message: j.error };
       return j;
     },
+    /* 後端版本：v2 起支援 cas */
+    ping: async () => { const r = await fetch(apiUrl() + (apiUrl().includes('?') ? '&' : '?') + 'op=ping&token=' + encodeURIComponent(API_TOKEN) + '&_=' + Date.now(), { method: 'GET', redirect: 'follow', cache: 'no-store', signal: sig() }); return r.json(); },
+    /* 單趟寫入：後端在鎖內比對（版本、時間戳），相同才寫；不同則回傳目前的 A2:Z3 */
+    cas: async (expect, range, values) => {
+      let r; try { r = await fetch(apiUrl(), { method: 'POST', redirect: 'follow', cache: 'no-store', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ op: 'cas', token: API_TOKEN, expect: expect.ver, expectAt: expect.at, expectId: expect.wid || '', range, values }), signal: sig() }); } catch (e) { throw apiErr(e); }
+      if (!r.ok) throw { code: 'api_http', message: 'HTTP ' + r.status };
+      let j; try { j = await r.json(); } catch (e) { throw { code: 'api_http', message: '回應不是 JSON' }; }
+      return j;
+    },
   };
   /* ---- 通道 B：claude.ai 內的 Google Sheets 連接器 ---- */
   const mcpT = (mcp) => ({
@@ -6119,14 +6140,21 @@ html.map-only .geo-plane{top:52%}
     return null;
   }
 
-  let T = null, apiBroken = false, pollTimer = null, hbInterval = null, roomSet = false, stopped = false;
+  let T = null, apiBroken = false, pollTimer = null, hbInterval = null, roomSet = false, stopped = false, casOK = false, lastReadMs = 0, failN = 0;
+  /* 本機有還沒寫到試算表的變更（例如上一次寫入失敗）：不能被遠端內容直接取代，也不能顯示「已同步」 */
+  const unsent = () => !!lastSeen && !timer && !writing && canon(state) !== lastSeen;
+  /* 遺失更新的偵測與補回：沒有 cas 的通道（舊版後端、連接器）「先讀再寫」之間仍可能被另一台同時寫入蓋掉。
+     sent 記住自己剛寫出的那一版與它的基底；之後讀到的版本若不是從我這一版接著寫的（版本號沒有超過我、或下一版的基底不是我），
+     就以三方合併把被蓋掉的變更補回去再寫一次。 */
+  let sent = null;
+  const same = (a, b) => { if (a === b) return true; if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false; const ka = Object.keys(a), kb = Object.keys(b); return ka.length === kb.length && ka.every((k) => same(a[k], b[k])); };
   const rowsToRemote = (rows) => {
     const meta = rows[0] || [], chunks = rows[1] || [];
-    const ver = Number(meta[0]) || 0, at = Number(meta[1]) || 0, by = String(meta[2] || ''), who = String(meta[3] || ''), key = String(meta[4] || ''), build = Number(meta[5]) || 0;
+    const ver = Number(meta[0]) || 0, at = Number(meta[1]) || 0, by = String(meta[2] || ''), who = String(meta[3] || ''), key = String(meta[4] || ''), build = Number(meta[5]) || 0, baseTok = String(meta[6] == null ? '' : meta[6]), wid = String(meta[7] || ''); /* H 欄 wid：這次寫入的唯一代號；G 欄 baseTok：這一版是接著哪一版寫的 */
     const json = chunks.map((c) => (c == null ? '' : String(c))).join('');
     const devices = [];
     for (let i = 0; i < DEV_ROWS; i++) { const r = rows[DEV_ROW0 - 2 + i]; if (!r || !r[0]) continue; devices.push({ row: DEV_ROW0 + i, id: String(r[0]), role: String(r[1] || ''), who: String(r[2] || ''), at: Number(r[3]) || 0 }); }
-    return { ver, at, by, who, key, build, json, devices };
+    return { ver, at, by, who, key, build, baseTok, wid, tok: wid || String(at), json, devices };
   };
   const via = () => '（' + (T ? T.label : '') + '・';
   /* 遠端狀態裡比本機多出來的量測（護理到府、病人端）：戰情室與醫師端以提示列出病人與數值，不必等人去翻清單 */
@@ -6151,19 +6179,26 @@ html.map-only .geo-plane{top:52%}
     if (rm.json && rm.key && typeof STORE_KEY === 'string' && rm.key !== STORE_KEY) { setDot('wait', '試算表內是舊版資料（' + rm.key + '），以本機示範資料覆蓋'); window.__syncPush(true); return false; }
     if (!rm.json) { if (!rm.ver || rm.ver <= localVer) { window.__syncPush(true); } return false; }
     if (rm.ver < localVer && canon(state) !== rm.json) { window.__syncPush(true); return false; } /* 本機較新（離線期間的操作）：推上去 */
-    if (rm.json === lastSeen) { setDot('ok', '已同步 ' + hhmmss() + via() + 'v' + rm.ver + '）'); return false; }
+    if (rm.json === lastSeen) { lastAt = rm.at; lastWid = rm.wid; if (rm.ver > localVer) saveVer(rm.ver); if (unsent()) { window.__syncPush(); return false; } setDot('ok', '已同步 ' + hhmmss() + via() + 'v' + rm.ver + '）'); return false; }
     if (timer || writing) { log('skip apply v' + rm.ver + ': local change pending'); return false; } /* 本機有尚未寫出的操作：先寫出再讀，避免操作在手上被遠端蓋掉 */
+    if (unsent()) { log('skip apply v' + rm.ver + ': unsent local change, merging'); window.__syncPush(); return false; } /* 上次寫入失敗留下的變更：交給寫入流程與遠端合併 */
     let o = null; try { o = JSON.parse(rm.json); } catch (e) { setDot('err', '試算表內容無法解析（可能被手動編輯）'); return false; }
     if (!o || !o.patients) { setDot('err', '試算表內容不是 AiKESO 狀態'); return false; }
+    let repaired = false;
+    if (sent && sent.base && Date.now() - sent.t < 20000 && rm.tok !== sent.wid && (rm.ver <= sent.ver || (rm.ver === sent.ver + 1 && rm.baseTok && rm.baseTok !== sent.wid))) {
+      try { const mg = merge3(JSON.parse(sent.base), JSON.parse(sent.mine), o); if (!same(mg, o)) { o = mg; repaired = true; } else log('checked v' + rm.ver + ' against my v' + sent.ver + ': nothing lost'); } catch (e) { log('repair check failed ' + e); }
+    }
+    sent = null;
     UI_KEYS.forEach((k) => { o[k] = state[k]; });
     const newMs = newMeasurements(state, o);
     const newOrd = (typeof newOrdersFor === 'function') ? newOrdersFor(state, o) : []; /* 護理端：醫師新開的醫囑 */
-    lastSeen = rm.json; saveVer(rm.ver); goFast(); state = o; if (typeof ensureBeds === 'function') ensureBeds(state.patients);
+    lastSeen = rm.json; lastAt = rm.at; lastWid = rm.wid; saveVer(rm.ver); goFast(); state = o; if (typeof ensureBeds === 'function') ensureBeds(state.patients);
     if (roleNow() === 'pt' && state.pt) { const me = window.__currentUser; if (me && P(me.who)) state.pt.pid = me.who; else if (!P(state.pt.pid)) { state.pt.pid = state.patients[0] ? state.patients[0].id : null; } }
     if (roleNow() === 'doc' && state.doc && state.doc.screen === 'case' && !P(state.doc.pid)) { state.doc.screen = 'list'; }
     saveLocal(); render(); window.__syncStats.applied++; log('applied v' + rm.ver + ' from ' + rm.by + ' (' + src + ')');
     announceMeasurements(newMs);
     if (newOrd.length && typeof announceOrders === 'function') announceOrders(newOrd);
+    if (repaired) { window.__syncStats.repaired = (window.__syncStats.repaired || 0) + 1; log('repaired a lost update against v' + rm.ver); window.__syncPush(); } /* state 已含補回的變更，與 lastSeen 不同 → 再寫一次 */
     setDot('ok', '已同步 ' + hhmmss() + '（來自 ' + ((typeof ROLE_LABEL !== 'undefined' && ROLE_LABEL[rm.by]) || rm.by || '其他裝置') + (rm.who ? '・' + rm.who : '') + '・' + src + '・' + (T ? T.label : '') + '・v' + rm.ver + '）');
     return true;
   };
@@ -6171,14 +6206,15 @@ html.map-only .geo-plane{top:52%}
     window.__syncStats.errors++; const c = e && e.code;
     if (terminal(c)) { setDot('off', errText(e)); stopAll(); return; }
     if (T && T.kind === 'api' && (c === 'network' || c === 'timeout') && hasClaude() && !apiBroken) { apiBroken = true; log('api unreachable, trying connector'); setDot('wait', '後端 API 連不上，改用 Google 試算表連接器…'); restart(true); return; }
-    if (c === 'server_unavailable' || c === 'rate_limited' || c === 'upstream_error' || c === 'network' || c === 'timeout' || c === 'api_http') { backoffUntil = Date.now() + Math.max(8000, (e && e.retryAfterMs) || 15000); }
+    if (c === 'server_unavailable' || c === 'rate_limited' || c === 'upstream_error' || c === 'network' || c === 'timeout' || c === 'api_http') { failN++; backoffUntil = Date.now() + Math.max(Math.min(15000, 1000 * Math.pow(2, failN)), (e && e.retryAfterMs) || 0); } /* 連續失敗才拉長等待：2、4、8、15 秒；成功一次就歸零 */
     setDot('err', what + '：' + errText(e));
   };
   async function refreshNow(src) {
     if (!T || refreshing || Date.now() < backoffUntil) return; refreshing = true;
-    try { const rows = await T.read(); applyRemote(rowsToRemote(rows), src); }
+    const t0 = performance.now();
+    try { const rows = await timed('readMs', () => T.read()); failN = 0; applyRemote(rowsToRemote(rows), src); }
     catch (e) { log('read failed ' + ((e && e.code) || e)); onErr(e, '讀取'); }
-    refreshing = false;
+    lastReadMs = performance.now() - t0; refreshing = false;
   }
   window.__syncRefresh = refreshNow;
   /* 三方合併：base＝上次同步的狀態、local＝本機、remote＝試算表目前的狀態。兩邊各自改的地方都保留；
@@ -6216,37 +6252,79 @@ html.map-only .geo-plane{top:52%}
   }
   window.__merge3 = merge3;
   let resetMark = false; window.__syncResetMark = () => { resetMark = true; };
+  /* 狀態 JSON 切成每格 ≤ 40,000 字。切點往前挪到安全位置：下一格不以 = + - ' @ 數字或空白開頭、這一格不以空白結尾，
+     避免試算表把某一格當成公式或數字而改掉內容（讀取端只是把各格接起來，舊版頁面照樣讀得懂）。 */
+  function chunksOf(mine) {
+    const out = []; let i = 0;
+    while (i < mine.length && out.length < COLS) {
+      let j = Math.min(i + CHUNK, mine.length);
+      if (j < mine.length) { let k = j; while (k > i + CHUNK - 400 && (/[\s=+\-'@0-9]/.test(mine[k]) || /\s/.test(mine[k - 1]))) k--; if (k > i + CHUNK - 400) j = k; }
+      out.push(mine.slice(i, j)); i = j;
+    }
+    if (i < mine.length) return null;
+    while (out.length < COLS) out.push('');
+    return out;
+  }
+  window.__syncChunks = chunksOf;
   async function flush(force) {
     if (!T) return;
     if (writing) { dirty = true; log('flush: busy, queued'); return; }
     let json = canon(state); if (!force && json === lastSeen) { log('flush: unchanged'); return; }
+    goFast(); /* 真的有變更才進入快速輪詢 */
     writing = true; dirty = false;
-    /* 寫入前先讀：別台裝置在這之間寫過，就先合併再寫，避免同時操作互相覆蓋 */
     const overwrite = force || resetMark; resetMark = false;
-    if (!overwrite && lastSeen) {
-      try {
-        const rm = rowsToRemote(await T.read());
-        window.__remoteVer = Math.max(window.__remoteVer || 0, rm.ver); window.__remoteBuild = Math.max(window.__remoteBuild || 0, rm.build);
-        if (rm.json && rm.json !== lastSeen && (!rm.key || typeof STORE_KEY !== 'string' || rm.key === STORE_KEY)) {
-          const merged = merge3(JSON.parse(lastSeen), JSON.parse(json), JSON.parse(rm.json));
-          UI_KEYS.forEach((k) => { merged[k] = state[k]; });
-          state = merged; if (typeof ensureBeds === 'function') ensureBeds(state.patients);
-          saveLocal(); render(); json = canon(state); window.__syncStats.merged = (window.__syncStats.merged || 0) + 1; log('merged with remote v' + rm.ver);
-        }
-      } catch (e) { log('pre-write read failed ' + ((e && e.code) || e)); }
-    }
-    const mine = json; const ver = Math.max(localVer, (window.__remoteVer || 0)) + 1;
-    const chunks = []; for (let i = 0; i < COLS; i++) chunks.push(mine.slice(i * CHUNK, (i + 1) * CHUNK));
-    if (mine.length > COLS * CHUNK) { setDot('err', '狀態太大（' + Math.round(mine.length / 1024) + ' KB）無法寫入試算表，請按「重設」'); writing = false; return; }
+    let baseJson = lastSeen, baseTok = lastWid || String(lastAt || ''); /* 這次寫入所根據的那一版 */
+    /* 別台裝置在這之間寫過：三方合併後再寫，避免同時操作互相覆蓋 */
+    const mergeWith = (rm) => {
+      window.__remoteVer = Math.max(window.__remoteVer || 0, rm.ver); window.__remoteBuild = Math.max(window.__remoteBuild || 0, rm.build);
+      if (rm.json && rm.json !== lastSeen && (!rm.key || typeof STORE_KEY !== 'string' || rm.key === STORE_KEY)) {
+        const merged = merge3(JSON.parse(lastSeen), JSON.parse(json), JSON.parse(rm.json));
+        UI_KEYS.forEach((k) => { merged[k] = state[k]; });
+        state = merged; if (typeof ensureBeds === 'function') ensureBeds(state.patients);
+        saveLocal(); render(); json = canon(state); window.__syncStats.merged = (window.__syncStats.merged || 0) + 1; log('merged with remote v' + rm.ver);
+      }
+      if (rm.json && (!rm.key || typeof STORE_KEY !== 'string' || rm.key === STORE_KEY)) { baseJson = rm.json; baseTok = rm.tok; }
+    };
+    const tooBig = () => { if (chunksOf(json)) return false; setDot('err', '狀態太大（' + Math.round(json.length / 1024) + ' KB）無法寫入試算表，請按「重設」'); return true; };
+    const rowsFor = (ver, at, mine, wid) => [[ver, at, roleNow(), whoNow(), (typeof STORE_KEY === 'string' ? STORE_KEY : ''), Math.max(APP_BUILD, window.__remoteBuild || 0), baseTok || '', wid], chunksOf(mine)];
+    const newWid = () => 'w' + devId + tabId + (++wseq).toString(36);
+    const finish = (mine, ver, at, wid, how) => {
+      sent = overwrite ? null : { base: baseJson, mine, ver, at, wid, t: Date.now() };
+      lastSeen = mine; lastAt = at; lastWid = wid; saveVer(ver); failN = 0; window.__syncStats.pushed++; log('wrote v' + ver + ' (' + mine.length + ' chars, ' + how + ')'); setDot('ok', '已同步 ' + hhmmss() + '（已寫入・' + T.label + '・v' + ver + '）'); if (window.__syncPing) window.__syncPing();
+      if (bc) { try { bc.postMessage({ ver, at, wid, baseTok, by: roleNow(), who: whoNow(), key: (typeof STORE_KEY === 'string' ? STORE_KEY : ''), build: Math.max(APP_BUILD, window.__remoteBuild || 0), json: mine, from: tabId }); } catch (e) { } }
+    };
     try {
-      await T.write(RANGE_STATE, [[ver, Date.now(), roleNow(), whoNow(), (typeof STORE_KEY === 'string' ? STORE_KEY : ''), Math.max(APP_BUILD, window.__remoteBuild || 0)], chunks]);
-      lastSeen = mine; saveVer(ver); goFast(); window.__syncStats.pushed++; log('wrote v' + ver + ' (' + mine.length + ' chars)'); setDot('ok', '已同步 ' + hhmmss() + '（已寫入・' + T.label + '・v' + ver + '）'); if (window.__syncPing) window.__syncPing();
-    } catch (e) { log('write failed ' + ((e && e.code) || e)); onErr(e, '寫入'); }
+      let done = false;
+      if (casOK && T.cas && !overwrite && lastSeen) {
+        let expect = { ver: localVer, at: lastAt, wid: lastWid };
+        for (let i = 0; i < 4 && !done; i++) {
+          if (tooBig()) { writing = false; return; }
+          const mine = json, at = Date.now(), wid = newWid();
+          const r = await timed('writeMs', () => T.cas(expect, RANGE_STATE, rowsFor(expect.ver + 1, at, mine, wid)));
+          if (r && r.cas && r.status === 'success') { finish(mine, expect.ver + 1, at, wid, 'cas'); done = true; }
+          else if (r && r.cas && r.conflict) { const rm = rowsToRemote(r.values || []); window.__syncStats.casConflicts = (window.__syncStats.casConflicts || 0) + 1; log('cas conflict: remote v' + rm.ver); mergeWith(rm); expect = { ver: rm.ver, at: rm.at, wid: rm.wid }; }
+          else { casOK = false; window.__syncCas = false; log('cas unsupported, using read+write'); break; }
+        }
+      }
+      if (!done) {
+        if (!overwrite && lastSeen) {
+          try { mergeWith(rowsToRemote(await timed('readMs', () => T.read()))); }
+          catch (e) { log('pre-write read failed ' + ((e && e.code) || e)); }
+        }
+        if (tooBig()) { writing = false; return; }
+        const mine = json, at = Date.now(), wid = newWid(); const ver = Math.max(localVer, (window.__remoteVer || 0)) + 1;
+        await timed('writeMs', () => T.write(RANGE_STATE, rowsFor(ver, at, mine, wid)));
+        finish(mine, ver, at, wid, 'write');
+      }
+    } catch (e) { log('write failed ' + ((e && e.code) || e)); onErr(e, '寫入'); clearTimeout(retryTimer); retryTimer = setTimeout(() => { if (canon(state) !== lastSeen) window.__syncPush(); }, Math.max(1500, backoffUntil - Date.now() + 200)); /* 寫入失敗：等待時間到就自動再試 */ }
     writing = false; if (dirty) { dirty = false; flush(); }
   }
-  /* 變更後 400 ms 內一定寫一次（不被連續的 save() 一直往後推） */
-  let forcePending = false;
-  window.__syncPush = (force) => { goFast(); if (force === true) forcePending = true; if (timer) return; timer = setTimeout(() => { timer = null; const f = forcePending; forcePending = false; flush(f); }, 400); };
+  /* 變更後 0.12 秒內一定寫一次（不被連續的 save() 一直往後推） */
+  let forcePending = false, retryTimer = null;
+  window.__syncPush = (force) => { if (force === true) forcePending = true; if (timer) return; timer = setTimeout(() => { timer = null; const f = forcePending; forcePending = false; flush(f); }, PUSH_MS); };
+  /* 同一個瀏覽器裡的其他分頁（例如同一台筆電同時開戰情室與醫師端）：寫入成功後直接廣播新狀態，不必等下一次輪詢 */
+  const tabId = Math.random().toString(36).slice(2, 8); let bc = null, wseq = 0;
+  try { if (typeof BroadcastChannel === 'function') { bc = new BroadcastChannel('aikeso-sync'); bc.onmessage = (e) => { const m = e && e.data; if (!m || m.from === tabId || !m.json || !(m.ver > localVer)) return; window.__syncStats.bc = (window.__syncStats.bc || 0) + 1; applyRemote({ ver: m.ver, at: m.at, wid: m.wid || '', tok: m.wid || String(m.at), baseTok: m.baseTok || '', by: m.by, who: m.who, key: m.key, build: m.build, json: m.json, devices: window.__remoteDevices || [] }, '同裝置即時'); }; } } catch (e) { bc = null; }
   /* 線上裝置：每 30 秒把自己（裝置ID、端、登入者、時間）寫到第 5 列起的空列或自己的列 */
   let hbTimer = null;
   async function heartbeat() {
@@ -6274,7 +6352,7 @@ html.map-only .geo-plane{top:52%}
   window.__newerBuild = newerBuild; window.__appBuild = APP_BUILD;
   try { const w = document.getElementById('sync-wrap'); if (w && typeof buildStamp === 'function') w.title = '同步狀態' + buildStamp(); } catch (e) { }
   function stopAll() { clearTimeout(pollTimer); clearInterval(hbInterval); pollTimer = null; hbInterval = null; stopped = true; }
-  function schedulePoll() { clearTimeout(pollTimer); pollTimer = setTimeout(async () => { if (stopped) return; if (document.visibilityState === 'visible') { window.__syncStats.polls++; await refreshNow('定時刷新'); } schedulePoll(); }, Date.now() < fastUntil ? FAST_MS : POLL_MS); }
+  function schedulePoll() { clearTimeout(pollTimer); pollTimer = setTimeout(async () => { if (stopped) return; if (document.visibilityState === 'visible') { window.__syncStats.polls++; await refreshNow('定時刷新'); } else lastReadMs = 0; schedulePoll(); }, Math.max(150, cycleMs() - lastReadMs)); }
   async function start(skipApi) {
     stopped = false; backoffUntil = 0;
     if (!apiUrl() && !hasClaude()) { T = null; setDot('off', '單機模式（沒有後端 API，也不在 claude.ai 內）'); return; }
@@ -6282,6 +6360,8 @@ html.map-only .geo-plane{top:52%}
     T = await pickTransport(skipApi);
     if (!T) { setDot('off', apiUrl() ? '單機模式（後端 API 連不上，且此檢視沒有連接器）' : '單機模式（此檢視沒有連接器：未登入 claude.ai 或未授權）'); return; }
     window.__syncTransport = T.kind;
+    /* 後端是否支援單趟寫入（v2）；不支援就維持「先讀再寫」 */
+    casOK = false; window.__syncCas = false; if (T.kind === 'api' && T.ping) T.ping().then((j) => { casOK = !!(j && Number(j.v) >= 2); window.__syncCas = casOK; log('backend v' + ((j && j.v) || 1)); if (window.__renderDevices) window.__renderDevices(); }).catch(() => { });
     /* 1) 首次讀取（連接器通道第一次會跳出「允許此頁使用 Google Sheets」） */
     refreshNow('首次連線').then(() => { heartbeat(); });
     /* 2) 固定輪詢（前景時）；回到前景立刻讀 */
@@ -6302,6 +6382,8 @@ html.map-only .geo-plane{top:52%}
   function restart(skipApi) { stopAll(); start(skipApi); }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshNow('回到前景'); heartbeat(); } });
   window.addEventListener('focus', () => refreshNow('回到前景'));
+  /* 網路恢復：立刻補送尚未寫出的操作並讀一次 */
+  window.addEventListener('online', () => { backoffUntil = 0; if (canon(state) !== lastSeen) window.__syncPush(); refreshNow('恢復連線'); });
   /* 手動重試（授權被拒或連線錯誤時）；設定變更後重新連線 */
   window.__syncRetry = () => { apiBroken = false; backoffUntil = 0; if (!T || stopped) restart(false); else refreshNow('手動重試'); };
   window.__syncRestart = () => { apiBroken = false; restart(false); };
